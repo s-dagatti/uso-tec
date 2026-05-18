@@ -573,4 +573,4 @@ else:
                 st.info("No hay modelos S700 registrados.")
 
 else:
-    st.info("👋 Hola Suyai! Cargá el archivo CSV.")
+    st.info("👋 Hola Suyai! Cargá el archivo CSV de respaldo si la nube falla.")
