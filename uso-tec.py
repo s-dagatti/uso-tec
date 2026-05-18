@@ -10,7 +10,7 @@ st.set_page_config(page_title="Dashboard Tecnología Conci", layout="wide")
 
 # --- 0. CONFIGURACIÓN DEL LAGO DE DATOS EN GITHUB ---
 # REEMPLAZA ESTA URL CON EL LINK "RAW" QUE COPIASTE EN EL PASO 2
-URL_GITHUB_RAW = "https://raw.githubusercontent.com/TuUsuario/TuRepositorio/main/Hoja%201.csv"
+URL_GITHUB_RAW = "https://github.com/s-dagatti/uso-tec/blob/main/Hoja%201.csv"
 
 
 @st.cache_data(ttl=300)  # Se cachea por 5 minutos para que la navegación sea ultra rápida
