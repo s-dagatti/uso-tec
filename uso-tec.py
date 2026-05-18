@@ -9,8 +9,8 @@ from datetime import datetime
 st.set_page_config(page_title="Dashboard Tecnología Conci", layout="wide")
 
 # --- 0. CONFIGURACIÓN DEL LAGO DE DATOS EN GITHUB ---
-# REEMPLAZA ESTA URL CON EL LINK "RAW" QUE COPIASTE EN EL PASO 2
-URL_GITHUB_RAW = "https://github.com/s-dagatti/uso-tec/blob/main/Hoja%201.csv"
+# Corregido a formato RAW para que Pandas pueda leerlo directamente
+URL_GITHUB_RAW = "https://raw.githubusercontent.com/s-dagatti/uso-tec/main/Hoja%201.csv"
 
 
 @st.cache_data(ttl=300)  # Se cachea por 5 minutos para que la navegación sea ultra rápida
@@ -25,7 +25,6 @@ def cargar_datos_desde_github(url):
 
 
 # --- 1. FUNCIONES DE PROCESAMIENTO ---
-# (Tus funciones originales quedan exactamente igual...)
 def procesar_datos_base(df):
     df.columns = [c.strip() for c in df.columns]
     df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
@@ -64,20 +63,17 @@ df_raw = cargar_datos_desde_github(URL_GITHUB_RAW)
 
 if df_raw is not None:
     st.sidebar.success("✅ Base de datos en la nube conectada")
-
-    df_raw['Sucursal'] = df_raw['Sucursal'].fillna("Sin Asignar").astype(str)
-    df_full = procesar_datos_base(df_raw)
-    df_full = filtrar_aptitud(df_full)
-
-    # ... A PARTIR DE ACÁ QUEDA TODO EL RESTO DE TU ESQUELETO DE ORO INTACTO
 else:
     st.sidebar.error("❌ Falló la conexión automática.")
     archivo_manual = st.sidebar.file_uploader("Subí el archivo manual de respaldo", type="csv")
     if archivo_manual:
         df_raw = pd.read_csv(archivo_manual)
-        # (Lógica de procesamiento manual si hiciera falta...)
 
-    # A partir de acá sigue el resto de tu código (Filtros de fecha, Tiers, Tabs, etc.)
+# --- 3. PROCESAMIENTO GENERAL (Fuera del Bloque Else) ---
+if df_raw is not None:
+    df_raw['Sucursal'] = df_raw['Sucursal'].fillna("Sin Asignar").astype(str)
+    df_full = procesar_datos_base(df_raw)
+    df_full = filtrar_aptitud(df_full)
 
     # --- FILTRO DE FECHA (MES/AÑO) EN SIDEBAR ---
     st.sidebar.subheader("📅 Periodo de Análisis")
@@ -96,7 +92,7 @@ else:
     df_full = df_full[
         (df_full['Fecha de terminación'] >= periodo_seleccionado[0]) &
         (df_full['Fecha de terminación'] <= periodo_seleccionado[1])
-        ]
+    ]
 
     # Identificación de Tiers
     col_at = [c for c in df_full.columns if 'AutoTrac' in c and 'Activo' in c]
@@ -110,22 +106,24 @@ else:
     }
 
     cols_avanzadas = [col for lista in dict_t2.values() for col in lista]
-    # Tier 2 por fila (promedio de las columnas existentes)
     df_full['Tier_2'] = df_full[cols_avanzadas].mean(axis=1)
 
     ultima_fecha = df_full['Fecha de terminación'].max()
 
     # --- FILTROS SIDEBAR ---
     sucursales = st.sidebar.multiselect("1. Filtrar Sucursal", options=sorted(df_full['Sucursal'].unique().tolist()))
-    if sucursales: df_full = df_full[df_full['Sucursal'].isin(sucursales)]
+    if sucursales: 
+        df_full = df_full[df_full['Sucursal'].isin(sucursales)]
 
     organizaciones = st.sidebar.multiselect("2. Filtrar Organización",
                                             options=sorted(df_full['Organización'].dropna().unique().tolist()))
-    if organizaciones: df_full = df_full[df_full['Organización'].isin(organizaciones)]
+    if organizaciones: 
+        df_full = df_full[df_full['Organización'].isin(organizaciones)]
 
     tipos = st.sidebar.multiselect("3. Filtrar Tipo de Máquina",
                                    options=sorted(df_full['Tipo'].dropna().unique().tolist()))
-    if tipos: df_full = df_full[df_full['Tipo'].isin(tipos)]
+    if tipos: 
+        df_full = df_full[df_full['Tipo'].isin(tipos)]
 
     df_latest = df_full[df_full['Fecha de terminación'] == ultima_fecha].copy()
     df_aptas_latest = df_latest[df_latest['Es_Apta'] == True].copy()
@@ -192,12 +190,10 @@ else:
                         'Tier_2', ascending=False).style.format({'Tier_1': '{:.1f}%', 'Tier_2': '{:.1f}%'}),
                     use_container_width=True)
                 col_t1, col_t2 = st.columns(2)
-                with col_t1: st.plotly_chart(
-                    px.pie(foco_inicial, names='Tipo', title='Tipos (Adopción Inicial)', hole=0.4),
-                    use_container_width=True)
-                with col_t2: st.plotly_chart(
-                    px.pie(foco_inicial, names='Modelo', title='Modelos (Adopción Inicial)', hole=0.4),
-                    use_container_width=True)
+                with col_t1: 
+                    st.plotly_chart(px.pie(foco_inicial, names='Tipo', title='Tipos (Adopción Inicial)', hole=0.4), use_container_width=True)
+                with col_t2: 
+                    st.plotly_chart(px.pie(foco_inicial, names='Modelo', title='Modelos (Adopción Inicial)', hole=0.4), use_container_width=True)
 
     # ---------------------------------------------------------
     # TAB 2: ANÁLISIS TIER 1
@@ -207,8 +203,7 @@ else:
         if not df_aptas_latest.empty:
             st.metric(label="Uso Promedio AutoTrac™ (Últ. Fecha)", value=f"{df_aptas_latest['Tier_1'].mean():.1f}%")
             st.subheader("Uso de AutoTrac™ por Tipo de Maquinaria")
-            df_at_tipo = df_aptas_latest.groupby('Tipo')['Tier_1'].mean().reset_index().sort_values('Tier_1',
-                                                                                                    ascending=False)
+            df_at_tipo = df_aptas_latest.groupby('Tipo')['Tier_1'].mean().reset_index().sort_values('Tier_1', ascending=False)
             st.plotly_chart(px.bar(df_at_tipo, x='Tipo', y='Tier_1', text_auto='.1f', color='Tier_1',
                                    color_continuous_scale='Greens'), use_container_width=True)
             st.divider()
@@ -219,15 +214,12 @@ else:
                 'Número de serie')
             df_ranking = df_aptas_latest[(df_aptas_latest['Tier_1'].fillna(0) >= rango_uso[0]) & (
                     df_aptas_latest['Tier_1'].fillna(0) <= rango_uso[1])].copy()
-            st.dataframe(df_ranking[['Organización', 'Modelo', col_serie, 'Tier_1', 'Sucursal']].sort_values('Tier_1',
-                                                                                                             ascending=False).style.format(
+            st.dataframe(df_ranking[['Organización', 'Modelo', col_serie, 'Tier_1', 'Sucursal']].sort_values('Tier_1', ascending=False).style.format(
                 {'Tier_1': '{:.1f}%'}), use_container_width=True)
             st.divider()
             df_hist_aptas = df_full[df_full['Es_Apta'] == True].copy()
             df_evol = df_hist_aptas.groupby('Fecha de terminación').agg(Promedio_Tier_1=('Tier_1', 'mean'),
-                                                                        Cant_Maquinas=('Tier_1',
-                                                                                       'count')).reset_index().sort_values(
-                'Fecha de terminación')
+                                                                       Cant_Maquinas=('Tier_1', 'count')).reset_index().sort_values('Fecha de terminación')
             fig_hist = go.Figure()
             fig_hist.add_trace(
                 go.Bar(x=df_evol['Fecha de terminación'], y=df_evol['Cant_Maquinas'], name='Nro. Máquinas',
@@ -265,30 +257,25 @@ else:
                 for n, c in dict_t2.items():
                     if c:
                         td = df_aptas_latest.groupby('Tipo')[c].mean().mean(axis=1).reset_index()
-                        td['Tecnología'] = n;
-                        td.columns = ['Tipo', 'Uso (%)', 'Tecnología'];
+                        td['Tecnología'] = n
+                        td.columns = ['Tipo', 'Uso (%)', 'Tecnología']
                         t_list.append(td)
-                if t_list: st.plotly_chart(
-                    px.bar(pd.concat(t_list), x='Tipo', y='Uso (%)', color='Tecnología', barmode='group',
-                           text_auto='.1f', color_discrete_sequence=px.colors.qualitative.Prism),
-                    use_container_width=True)
+                if t_list: 
+                    st.plotly_chart(px.bar(pd.concat(t_list), x='Tipo', y='Uso (%)', color='Tecnología', barmode='group',
+                                           text_auto='.1f', color_discrete_sequence=px.colors.qualitative.Prism), use_container_width=True)
 
                 st.divider()
                 st.subheader("📋 Detalle por Unidad")
                 fs1, fs2, fs3, fs4 = st.columns(4)
-                with fs1:
-                    r_ap = st.slider("AutoPath (%)", 0.0, 100.0, (0.0, 100.0), key="s_ap")
-                with fs2:
-                    r_atta = st.slider("ATTA (%)", 0.0, 100.0, (0.0, 100.0), key="s_atta")
-                with fs3:
-                    r_gp = st.slider("Guiado Pasivo (%)", 0.0, 100.0, (0.0, 100.0), key="s_gp")
-                with fs4:
-                    r_ms = st.slider("Machine Sync (%)", 0.0, 100.0, (0.0, 100.0), key="s_ms")
+                with fs1: r_ap = st.slider("AutoPath (%)", 0.0, 100.0, (0.0, 100.0), key="s_ap")
+                with fs2: r_atta = st.slider("ATTA (%)", 0.0, 100.0, (0.0, 100.0), key="s_atta")
+                with fs3: r_gp = st.slider("Guiado Pasivo (%)", 0.0, 100.0, (0.0, 100.0), key="s_gp")
+                with fs4: r_ms = st.slider("Machine Sync (%)", 0.0, 100.0, (0.0, 100.0), key="s_ms")
 
-                col_s = next((c for c in df_aptas_latest.columns if any(k in c.lower() for k in ['serie', 'pin'])),
-                             'Número de serie')
+                col_s = next((c for c in df_aptas_latest.columns if any(k in c.lower() for k in ['serie', 'pin'])), 'Número de serie')
                 df_det = df_aptas_latest[['Organización', 'Modelo', col_s]].copy()
-                for t, cs in dict_t2.items(): df_det[t] = df_aptas_latest[cs].mean(axis=1) if cs else 0
+                for t, cs in dict_t2.items(): 
+                    df_det[t] = df_aptas_latest[cs].mean(axis=1) if cs else 0
                 df_det_f = df_det[
                     (df_det['AutoPath'].fillna(0) >= r_ap[0]) & (df_det['AutoPath'].fillna(0) <= r_ap[1]) & (
                             df_det['ATTA (Maniobras)'].fillna(0) >= r_atta[0]) & (
@@ -296,38 +283,31 @@ else:
                             df_det['Guiado Pasivo'].fillna(0) >= r_gp[0]) & (
                             df_det['Guiado Pasivo'].fillna(0) <= r_gp[1]) & (
                             df_det['Machine Sync'].fillna(0) >= r_ms[0]) & (
-                            df_det['Machine Sync'].fillna(0) <= r_ms[1])].dropna(subset=list(dict_t2.keys()),
-                                                                                 how='all')
-                st.dataframe(df_det_f.sort_values('Organización').style.format({t: '{:.1f}%' for t in dict_t2.keys()},
-                                                                               na_rep='0.0%'), use_container_width=True)
+                            df_det['Machine Sync'].fillna(0) <= r_ms[1])].dropna(subset=list(dict_t2.keys()), how='all')
+                st.dataframe(df_det_f.sort_values('Organización').style.format({t: '{:.1f}%' for t in dict_t2.keys()}, na_rep='0.0%'), use_container_width=True)
 
-                st.divider();
+                st.divider()
                 st.subheader("📈 Evolución Histórica Tier 2")
                 df_hist_aptas = df_full[df_full['Es_Apta'] == True].copy()
 
                 st.write("#### Evolución General del Paquete")
-                df_ev_t2_gen = df_hist_aptas.groupby('Fecha de terminación').agg(Uso=('Tier_2', 'mean'), Cant=('Tier_2',
-                                                                                                               'count')).reset_index().sort_values(
-                    'Fecha de terminación')
+                df_ev_t2_gen = df_hist_aptas.groupby('Fecha de terminación').agg(Uso=('Tier_2', 'mean'), Cant=('Tier_2', 'count')).reset_index().sort_values('Fecha de terminación')
                 fig_gen = go.Figure()
                 fig_gen.add_trace(
                     go.Bar(x=df_ev_t2_gen['Fecha de terminación'], y=df_ev_t2_gen['Cant'], name='Máquinas',
                            marker_color='rgba(158, 202, 225, 0.6)', yaxis='y'))
                 fig_gen.add_trace(go.Scatter(x=df_ev_t2_gen['Fecha de terminación'], y=df_ev_t2_gen['Uso'],
-                                             name='% Uso Promedio Tier 2', line=dict(color='purple', width=4),
-                                             yaxis='y2'))
-                fig_gen.update_layout(yaxis2=dict(overlaying='y', side='right', range=[0, 100]), hovermode='x unified');
+                                             name='% Uso Promedio Tier 2', line=dict(color='purple', width=4), yaxis='y2'))
+                fig_gen.update_layout(yaxis2=dict(overlaying='y', side='right', range=[0, 100]), hovermode='x unified')
                 st.plotly_chart(fig_gen, use_container_width=True)
 
                 st.write("#### Evolución por Tecnología Individual")
-                c1, c2 = st.columns(2);
-                c3, c4 = st.columns(2);
+                c1, c2 = st.columns(2)
+                c3, c4 = st.columns(2)
                 cols_g = [c1, c2, c3, c4]
                 for i, (t_name, c_list) in enumerate(dict_t2.items()):
                     if c_list:
-                        df_ev_ind = df_hist_aptas.groupby('Fecha de terminación').agg(Uso=(c_list[0], 'mean'),
-                                                                                      Cant=(c_list[0],
-                                                                                            'count')).reset_index()
+                        df_ev_ind = df_hist_aptas.groupby('Fecha de terminación').agg(Uso=(c_list[0], 'mean'), Cant=(c_list[0], 'count')).reset_index()
                         fig_ind = go.Figure()
                         fig_ind.add_trace(
                             go.Bar(x=df_ev_ind['Fecha de terminación'], y=df_ev_ind['Cant'], name='Máquinas',
@@ -335,18 +315,15 @@ else:
                         fig_ind.add_trace(
                             go.Scatter(x=df_ev_ind['Fecha de terminación'], y=df_ev_ind['Uso'], name='% Uso',
                                        line=dict(color='firebrick', width=3), yaxis='y2'))
-                        fig_ind.update_layout(title=f"{t_name}",
-                                              yaxis2=dict(overlaying='y', side='right', range=[0, 100]), height=350);
+                        fig_ind.update_layout(title=f"{t_name}", yaxis2=dict(overlaying='y', side='right', range=[0, 100]), height=350)
                         cols_g[i].plotly_chart(fig_ind, use_container_width=True)
 
         with sub_tab2:
             st.subheader("🎯 Potenciales Machine Sync")
             trac_ms_list = ['7M 200', '7M 215', '7M 230', '7230R']
             cos_models = ['S760', 'S770', 'S780', 'S790', 'S7 600', 'S7 700', 'S7 800', 'S7 900']
-            df_ms_cos = df_aptas_latest[
-                (df_aptas_latest['Tipo'] == 'Cosechadora') & (df_aptas_latest['Modelo'].isin(cos_models))]
-            df_ms_trac = df_aptas_latest[
-                (df_aptas_latest['Tipo'] == 'Tractor') & (df_aptas_latest['Modelo'].isin(trac_ms_list))]
+            df_ms_cos = df_aptas_latest[(df_aptas_latest['Tipo'] == 'Cosechadora') & (df_aptas_latest['Modelo'].isin(cos_models))]
+            df_ms_trac = df_aptas_latest[(df_aptas_latest['Tipo'] == 'Tractor') & (df_aptas_latest['Modelo'].isin(trac_ms_list))]
             if not df_ms_cos.empty and not df_ms_trac.empty:
                 col_sync = dict_t2['Machine Sync'][0] if dict_t2['Machine Sync'] else None
                 df_m_ms = pd.merge(df_ms_cos[['Organización', 'Modelo', col_sync, 'Sucursal']].rename(
@@ -355,22 +332,19 @@ else:
                     on='Organización').drop_duplicates()
                 if not df_m_ms.empty:
                     st.dataframe(df_m_ms.style.apply(lambda r: ['background-color: #ffcccc' if (
-                                pd.isna(r['Machine Sync (%)']) or r[
-                            'Machine Sync (%)'] < 1.0) else 'background-color: #ccffcc'] * len(r), axis=1).format(
+                                pd.isna(r['Machine Sync (%)']) or r['Machine Sync (%)'] < 1.0) else 'background-color: #ccffcc'] * len(r), axis=1).format(
                         {'Machine Sync (%)': '{:.1f}%'}, na_rep='0.0%'), use_container_width=True)
 
                     col_b, col_p = st.columns(2)
                     with col_b:
                         df_pot_ms = df_m_ms[df_m_ms['Machine Sync (%)'].fillna(0) < 1.0]
                         if not df_pot_ms.empty:
-                            df_chart_ms = df_pot_ms.groupby('Sucursal')['Organización'].nunique().reset_index(
-                                name='Cant. Organizaciones')
+                            df_chart_ms = df_pot_ms.groupby('Sucursal')['Organización'].nunique().reset_index(name='Cant. Organizaciones')
                             st.plotly_chart(
                                 px.bar(df_chart_ms.sort_values('Cant. Organizaciones', ascending=False), x='Sucursal',
                                        y='Cant. Organizaciones', title='Potenciales por Sucursal (Sync)',
                                        text_auto=True, color='Sucursal'), use_container_width=True)
                     with col_p:
-                        # Gráfico de Torta: Adopción Real vs Potencial
                         df_pie = df_m_ms.drop_duplicates('Organización').copy()
                         df_pie['Estado'] = np.where(df_pie['Machine Sync (%)'] >= 1.0, 'Con Uso', 'Potencial')
                         fig_ms_pie = px.pie(df_pie, names='Estado', title='Estado de Adopción (Total Orgs)', hole=0.4,
@@ -385,10 +359,8 @@ else:
                             '8270R', '8295R', '8320R', '8335R', '8345R', '8370R', '8370RT', '8400R', '9420R', '9470R',
                             '9520R', '9570R', '9R 390']
             pulv_models = ['M4025', 'M4030', 'M4040', '4730']
-            df_ap_trac = df_aptas_latest[
-                (df_aptas_latest['Tipo'] == 'Tractor') & (df_aptas_latest['Modelo'].isin(trac_ap_list))]
-            df_ap_pulv = df_aptas_latest[
-                (df_aptas_latest['Tipo'] == 'Pulverizadora') & (df_aptas_latest['Modelo'].isin(pulv_models))]
+            df_ap_trac = df_aptas_latest[(df_aptas_latest['Tipo'] == 'Tractor') & (df_aptas_latest['Modelo'].isin(trac_ap_list))]
+            df_ap_pulv = df_aptas_latest[(df_aptas_latest['Tipo'] == 'Pulverizadora') & (df_aptas_latest['Modelo'].isin(pulv_models))]
             if not df_ap_trac.empty and not df_ap_pulv.empty:
                 col_ap = dict_t2['AutoPath'][0] if dict_t2['AutoPath'] else None
                 df_m_ap = pd.merge(df_ap_trac[['Organización', 'Modelo']].rename(columns={'Modelo': 'Tractor'}),
@@ -397,16 +369,14 @@ else:
                                    on='Organización').drop_duplicates()
                 if not df_m_ap.empty:
                     st.dataframe(df_m_ap.style.apply(lambda r: ['background-color: #ffcccc' if (
-                                pd.isna(r['AutoPath (%)']) or r[
-                            'AutoPath (%)'] < 1.0) else 'background-color: #ccffcc'] * len(r), axis=1).format(
+                                pd.isna(r['AutoPath (%)']) or r['AutoPath (%)'] < 1.0) else 'background-color: #ccffcc'] * len(r), axis=1).format(
                         {'AutoPath (%)': '{:.1f}%'}, na_rep='0.0%'), use_container_width=True)
 
                     col_b, col_p = st.columns(2)
                     with col_b:
                         df_pot_ap = df_m_ap[df_m_ap['AutoPath (%)'].fillna(0) < 1.0]
                         if not df_pot_ap.empty:
-                            df_chart_ap = df_pot_ap.groupby('Sucursal')['Organización'].nunique().reset_index(
-                                name='Cant. Organizaciones')
+                            df_chart_ap = df_pot_ap.groupby('Sucursal')['Organización'].nunique().reset_index(name='Cant. Organizaciones')
                             st.plotly_chart(
                                 px.bar(df_chart_ap.sort_values('Cant. Organizaciones', ascending=False), x='Sucursal',
                                        y='Cant. Organizaciones', title='Potenciales por Sucursal (AutoPath)',
@@ -438,8 +408,7 @@ else:
                 with col_b:
                     df_pot_atta = df_atta_pot[df_atta_pot[col_atta].fillna(0) < 1.0]
                     if not df_pot_atta.empty:
-                        df_ch_atta = df_pot_atta.groupby('Sucursal')['Organización'].nunique().reset_index(
-                            name='Cant. Orgs')
+                        df_ch_atta = df_pot_atta.groupby('Sucursal')['Organización'].nunique().reset_index(name='Cant. Orgs')
                         st.plotly_chart(
                             px.bar(df_ch_atta.sort_values('Cant. Orgs', ascending=False), x='Sucursal', y='Cant. Orgs',
                                    title='Potenciales por Sucursal (ATTA)', text_auto=True, color='Sucursal'),
@@ -477,7 +446,6 @@ else:
                 st.divider()
                 st.write("📋 **Detalle Unidades S7 (Semáforo)**")
 
-
                 def aplicar_semaforo_s7(row):
                     styles = [''] * len(row)
                     v = row[col_velocidad]
@@ -486,9 +454,9 @@ else:
                     elif 50 <= v <= 60:
                         styles[3] = 'background-color: #ffffcc'  # Amarillo
                     a = row[col_atta_s7]
-                    if pd.isna(a) or a < 15: styles[4] = 'background-color: #ffcccc'  # Rojo
+                    if pd.isna(a) or a < 15: 
+                        styles[4] = 'background-color: #ffcccc'  # Rojo
                     return styles
-
 
                 st.dataframe(
                     df_s7[['Organización', 'Modelo', col_ajustes, col_velocidad, col_atta_s7, 'Sucursal']]
@@ -512,41 +480,31 @@ else:
                                         marker_color='rgba(200, 200, 200, 0.5)', yaxis='y'))
                 fig_s7.add_trace(go.Scatter(x=df_ev_s7['Fecha de terminación'], y=df_ev_s7['Ajustes'], name='% Ajustes',
                                             line=dict(width=3), yaxis='y2'))
-                fig_s7.add_trace(
-                    go.Scatter(x=df_ev_s7['Fecha de terminación'], y=df_ev_s7['Velocidad'], name='% Velocidad',
-                               line=dict(width=3), yaxis='y2'))
+                fig_s7.add_trace(go.Scatter(x=df_ev_s7['Fecha de terminación'], y=df_ev_s7['Velocidad'], name='% Velocidad',
+                                            line=dict(width=3), yaxis='y2'))
                 fig_s7.add_trace(go.Scatter(x=df_ev_s7['Fecha de terminación'], y=df_ev_s7['ATTA'], name='% ATTA',
                                             line=dict(width=3), yaxis='y2'))
-                fig_s7.update_layout(yaxis2=dict(overlaying='y', side='right', range=[0, 100]), hovermode='x unified',
-                                     height=450)
+                fig_s7.update_layout(yaxis2=dict(overlaying='y', side='right', range=[0, 100]), hovermode='x unified', height=450)
                 st.plotly_chart(fig_s7, use_container_width=True)
 
-                # --- NUEVA SECCIÓN: TORTAS DE ADOPCIÓN POR ORGANIZACIÓN ---
+                # --- TORTAS DE ADOPCIÓN POR ORGANIZACIÓN ---
                 st.divider()
                 st.write("🎯 **Nivel de Adopción por Organización (S7)**")
                 col_t1, col_t2 = st.columns(2)
 
                 with col_t1:
-                    # Agrupamos por Organización para ver quién superó el 50% en Velocidad
                     df_org_vel = df_s7.groupby('Organización')[col_velocidad].max().reset_index()
-                    df_org_vel['Estado'] = np.where(df_org_vel[col_velocidad] >= 50, 'Uso Óptimo (>50%)',
-                                                    'Bajo Uso (<50%)')
+                    df_org_vel['Estado'] = np.where(df_org_vel[col_velocidad] >= 50, 'Uso Óptimo (>50%)', 'Bajo Uso (<50%)')
                     fig_pie_vel = px.pie(df_org_vel, names='Estado', title='Org. con Automatización de Velocidad',
-                                         hole=0.4, color_discrete_map={'Uso Óptimo (>50%)': '#2ca02c',
-                                                                       'Bajo Uso (<50%)': '#d62728'})
+                                         hole=0.4, color_discrete_map={'Uso Óptimo (>50%)': '#2ca02c', 'Bajo Uso (<50%)': '#d62728'})
                     st.plotly_chart(fig_pie_vel, use_container_width=True)
 
                 with col_t2:
-                    # Agrupamos por Organización para ver quién superó el 15% en ATTA
                     df_org_atta = df_s7.groupby('Organización')[col_atta_s7].max().reset_index()
-                    df_org_atta['Estado'] = np.where(df_org_atta[col_atta_s7] >= 15, 'Uso Óptimo (>15%)',
-                                                     'Bajo Uso (<15%)')
-                    fig_pie_atta = px.pie(df_org_atta, names='Estado',
-                                          title='Org. con Automatización de Maniobras (ATTA)',
-                                          hole=0.4, color_discrete_map={'Uso Óptimo (>15%)': '#2ca02c',
-                                                                        'Bajo Uso (<15%)': '#d62728'})
+                    df_org_atta['Estado'] = np.where(df_org_atta[col_atta_s7] >= 15, 'Uso Óptimo (>15%)', 'Bajo Uso (<15%)')
+                    fig_pie_atta = px.pie(df_org_atta, names='Estado', title='Org. con Automatización de Maniobras (ATTA)',
+                                          hole=0.4, color_discrete_map={'Uso Óptimo (>15%)': '#2ca02c', 'Bajo Uso (<15%)': '#d62728'})
                     st.plotly_chart(fig_pie_atta, use_container_width=True)
-
             else:
                 st.info("No hay modelos S7 registrados.")
 
@@ -571,6 +529,5 @@ else:
                              use_container_width=True)
             else:
                 st.info("No hay modelos S700 registrados.")
-
 else:
-    st.info("👋 Hola Suyai! Cargá el archivo CSV de respaldo si la nube falla.")
+    st.info("👋 ¡Hola Suyai! No se detectaron datos cargados automáticamente. Si la conexión a la nube falló, usá el cargador manual de la barra lateral.")
