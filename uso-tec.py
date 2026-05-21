@@ -81,7 +81,7 @@ if df_raw is not None:
     max_date = df_full['Fecha de terminación'].max().to_pydatetime()
 
     periodo_seleccionado = st.sidebar.slider(
-        "Seleccioná el rango de tiempo",
+        "Seleccioná la última fecha de análisis (R12)",
         min_value=min_date,
         max_value=max_date,
         value=(min_date, max_date),
@@ -130,8 +130,8 @@ if df_raw is not None:
 
  # --- NAVEGACIÓN ---
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["🌡️ Termómetro General", "🛰️ Análisis Tier 1: AutoTrac", "🚀 Análisis Tier 2: Avanzado", "🌾 Cosechadoras",
-         "💧 CropCare"]
+        ["🌡️ Termómetro General", "Análisis Tier 1: AutoTrac", "Análisis Tier 2: Avanzado", "Cosechadoras",
+         "CropCare"]
     )
 
 
@@ -172,7 +172,7 @@ if df_raw is not None:
                 if not df_aptas_latest.empty:
                     st.scatter_chart(df_aptas_latest, x='Tier_1', y='Tier_2', color='Tipo')
 
-            st.subheader("🎯 Estrategia de Foco")
+            st.subheader("Estrategia de Foco")
             with st.expander("🔍 Clientes con Brecha Real (T1 Alto / T2 ≥ 1%)", expanded=True):
                 f_b = df_aptas_latest[df_aptas_latest['Tier_2'] >= 1.0].copy()
                 if not f_b.empty:
@@ -184,7 +184,7 @@ if df_raw is not None:
                         res_brecha.style.format({'Tier_1': '{:.1f}%', 'Tier_2': '{:.1f}%', 'Brecha': '{:.1f}%'}),
                         use_container_width=True)
 
-            st.subheader("🚀 Foco: Organizaciones en Adopción Inicial (Tier 2 entre 1% y 10%)")
+            st.subheader("Foco: Organizaciones en Adopción Inicial (Tier 2 entre 1% y 10%)")
             foco_inicial = df_aptas_latest[
                 (df_aptas_latest['Tier_2'] >= 1.0) & (df_aptas_latest['Tier_2'] <= 10.0)].copy()
             if not foco_inicial.empty:
@@ -242,7 +242,7 @@ if df_raw is not None:
     with tab3:
         st.header("🚀 Análisis Tier 2: Tecnologías Avanzadas")
         sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(
-            ["📊 General Avanzado", "🎯 Potenciales Machine Sync", "🛰️ Potenciales AutoPath", "🔄 Potenciales ATTA"])
+            ["General Avanzado", "Potenciales Machine Sync", "Potenciales AutoPath", "Potenciales ATTA"])
 
         with sub_tab1:
             if not df_aptas_latest.empty:
@@ -250,12 +250,12 @@ if df_raw is not None:
                 prom_t2_final = np.nanmean(list(tech_averages.values())) if tech_averages else 0
                 st.metric(label="Uso Promedio Paquete Tier 2 (Media de Tecnologías)", value=f"{prom_t2_final:.1f}%")
                 st.divider()
-                st.subheader("📊 Desglose por Tecnología")
+                st.subheader("Desglose por Tecnología")
                 cols_metrics = st.columns(len(tech_averages))
                 for i, (name, val) in enumerate(tech_averages.items()):
                     cols_metrics[i].metric(name, f"{val:.1f}%")
                 st.divider()
-                st.subheader("🚜 Uso por Tipo de Máquina")
+                st.subheader("Uso por Tipo de Máquina")
                 t_list = []
                 for n, c in dict_t2.items():
                     if c:
@@ -268,7 +268,7 @@ if df_raw is not None:
                                            text_auto='.1f', color_discrete_sequence=px.colors.qualitative.Prism), use_container_width=True)
 
                 st.divider()
-                st.subheader("📋 Detalle por Unidad")
+                st.subheader("Detalle por Unidad")
                 fs1, fs2, fs3, fs4 = st.columns(4)
                 with fs1: r_ap = st.slider("AutoPath (%)", 0.0, 100.0, (0.0, 100.0), key="s_ap")
                 with fs2: r_atta = st.slider("ATTA (%)", 0.0, 100.0, (0.0, 100.0), key="s_atta")
@@ -427,8 +427,8 @@ if df_raw is not None:
     # TAB 4: COSECHADORAS
     # ---------------------------------------------------------
     with tab4:
-        st.header("🌾 Análisis Específico de Cosechadoras")
-        sub_tab_s7, sub_tab_s700 = st.tabs(["🆕 Serie S7", "🏗️ Serie S700"])
+        st.header("Análisis Específico de Cosechadoras")
+        sub_tab_s7, sub_tab_s700 = st.tabs(["Serie S7", "Serie S700"])
 
         with sub_tab_s7:
             st.subheader("Desempeño Serie S7")
@@ -447,7 +447,7 @@ if df_raw is not None:
                 k3.metric("Maniobras ATTA", f"{df_s7[col_atta_s7].mean():.1f}%")
 
                 st.divider()
-                st.write("📋 **Detalle Unidades S7 (Semáforo)**")
+                st.write("**Detalle Unidades S7 (Semáforo)**")
 
                 def aplicar_semaforo_s7(row):
                     styles = [''] * len(row)
@@ -492,7 +492,7 @@ if df_raw is not None:
 
                 # --- TORTAS DE ADOPCIÓN POR ORGANIZACIÓN ---
                 st.divider()
-                st.write("🎯 **Nivel de Adopción por Organización (S7)**")
+                st.write("**Nivel de Adopción por Organización (S7)**")
                 col_t1, col_t2 = st.columns(2)
 
                 with col_t1:
@@ -526,7 +526,7 @@ if df_raw is not None:
                 k2.metric("Harvest Smart", f"{df_s700[col_harvest].mean():.1f}%")
 
                 st.divider()
-                st.write("📋 **Detalle Unidades S700**")
+                st.write("**Detalle Unidades S700**")
                 st.dataframe(df_s700[['Organización', 'Modelo', col_maintain, col_harvest, 'Sucursal']].sort_values(
                     'Organización').style.format({col_maintain: '{:.1f}%', col_harvest: '{:.1f}%'}, na_rep='0.0%'),
                              use_container_width=True)
@@ -537,7 +537,7 @@ if df_raw is not None:
         # TAB 5: PULVERIZADORAS
         # ---------------------------------------------------------
         with tab5:
-            st.header("🌱 Análisis Específico de Pulverizadoras")
+            st.header("💧 Análisis CropCare")
 
             # 1. Filtrado por tipo de maquinaria usando tu DataFrame base filtrado por fechas
             df_pulv = df_full[df_full['Tipo'].str.upper() == 'PULVERIZADORA'].copy()
@@ -581,7 +581,7 @@ if df_raw is not None:
                 st.divider()
 
                 # 3. Tabla de uso individual por equipo en el período actual
-                st.subheader("📋 Uso Individual por Pulverizadora (Último Reporte)")
+                st.subheader("Uso Individual por Pulverizadora (Último Reporte)")
                 col_serie_pulv = next(
                     (c for c in df_pulv_actual.columns if any(k in c.lower() for k in ['serie', 'pin'])),
                     'Número de serie de la máquina')
