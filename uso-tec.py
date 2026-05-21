@@ -128,9 +128,12 @@ if df_raw is not None:
     df_latest = df_full[df_full['Fecha de terminación'] == ultima_fecha].copy()
     df_aptas_latest = df_latest[df_latest['Es_Apta'] == True].copy()
 
-    # --- NAVEGACIÓN ---
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["🌡️ Termómetro General", "🛰️ Análisis Tier 1: AutoTrac", "🚀 Análisis Tier 2: Avanzado", "🌾 Cosechadoras"])
+ # --- NAVEGACIÓN ---
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["🌡️ Termómetro General", "🛰️ Análisis Tier 1: AutoTrac", "🚀 Análisis Tier 2: Avanzado", "🌾 Cosechadoras",
+         "💧 CropCare"]
+    )
+
 
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
@@ -529,5 +532,200 @@ if df_raw is not None:
                              use_container_width=True)
             else:
                 st.info("No hay modelos S700 registrados.")
+
+        # ---------------------------------------------------------
+        # TAB 5: PULVERIZADORAS
+        # ---------------------------------------------------------
+        with tab5:
+            st.header("🌱 Análisis Específico de Pulverizadoras")
+
+            # 1. Filtrado por tipo de maquinaria usando tu DataFrame base filtrado por fechas
+            df_pulv = df_full[df_full['Tipo'].str.upper() == 'PULVERIZADORA'].copy()
+
+            if df_pulv.empty:
+                st.warning("No se encontraron registros de 'Pulverizadora' para el período o filtros seleccionados.")
+            else:
+                col_pulsacion = 'Pulsación Activo (%)'
+                col_secciones = 'Tiempo de control de secciones Activo (%)'
+                col_at_pulv = 'Tier_1'  # Columna de AutoTrac calculada previamente en tu script global
+
+                # Identificamos la última fecha disponible específicamente para pulverizadoras
+                ultima_fecha_pulv = df_pulv['Fecha de terminación'].max()
+                df_pulv_actual = df_pulv[df_pulv['Fecha de terminación'] == ultima_fecha_pulv]
+
+                fecha_formateada = ultima_fecha_pulv.strftime('%d/%m/%Y') if pd.notnull(ultima_fecha_pulv) else "N/A"
+                st.subheader(f"📊 Resumen Actual (Última Fecha: {fecha_formateada})")
+
+                # 2. Cálculo de Promedios Actuales y Totales de Flota
+                promedio_pulsacion = df_pulv_actual[col_pulsacion].mean()
+                promedio_secciones = df_pulv_actual[col_secciones].mean()
+                promedio_autotrac = df_pulv_actual[col_at_pulv].mean()
+                total_pulverizadoras_actual = len(df_pulv_actual)  # Flota total de la última fecha (debería dar 91)
+
+                col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+                with col_kpi1:
+                    st.metric(label="Pulverizadoras Totales", value=total_pulverizadoras_actual)
+
+                with col_kpi2:
+                    val_autotrac = f"{promedio_autotrac:.1f}%" if pd.notnull(promedio_autotrac) else "Sin Datos"
+                    st.metric(label="Promedio AutoTrac™ (Tier 1)", value=val_autotrac)
+
+                with col_kpi3:
+                    val_secciones = f"{promedio_secciones:.1f}%" if pd.notnull(promedio_secciones) else "Sin Datos"
+                    st.metric(label="Promedio Control de Secciones", value=val_secciones)
+
+                with col_kpi4:
+                    val_pulsacion = f"{promedio_pulsacion:.1f}%" if pd.notnull(promedio_pulsacion) else "Sin Datos"
+                    st.metric(label="Promedio Pulsación Activo", value=val_pulsacion)
+
+                st.divider()
+
+                # 3. Tabla de uso individual por equipo en el período actual
+                st.subheader("📋 Uso Individual por Pulverizadora (Último Reporte)")
+                col_serie_pulv = next(
+                    (c for c in df_pulv_actual.columns if any(k in c.lower() for k in ['serie', 'pin'])),
+                    'Número de serie de la máquina')
+
+                tabla_individual = df_pulv_actual[[
+                    'Organización', 'Modelo', col_serie_pulv, col_at_pulv, col_pulsacion, col_secciones, 'Sucursal'
+                ]].copy()
+
+                st.dataframe(
+                    tabla_individual.sort_values('Organización')
+                    .style.format({col_at_pulv: '{:.1f}%', col_pulsacion: '{:.1f}%', col_secciones: '{:.1f}%'},
+                                  na_rep='N/D'),
+                    use_container_width=True
+                )
+
+                st.divider()
+
+                # 4. Histórico de adopción (Gráfico mixto: Uso % vs Cantidad de Máquinas con AutoTrac)
+                st.subheader("📈 Evolución Histórica del Uso de Tecnología")
+
+                # Cant_Maquinas considera únicamente las filas con registros válidos de AutoTrac (Tier_1)
+                df_hist_tendencia = df_pulv.groupby('Fecha de terminación').agg(
+                    Prom_Pulsacion=(col_pulsacion, 'mean'),
+                    Prom_Secciones=(col_secciones, 'mean'),
+                    Prom_AutoTrac=(col_at_pulv, 'mean'),
+                    Cant_Maquinas=(col_at_pulv, 'count')
+                ).reset_index().sort_values('Fecha de terminación')
+
+                if not df_hist_tendencia.empty:
+                    fig_pulv_hist = go.Figure()
+
+                    # Barras para la cantidad de máquinas pulverizadoras con AutoTrac (Eje Y izquierdo)
+                    fig_pulv_hist.add_trace(
+                        go.Bar(
+                            x=df_hist_tendencia['Fecha de terminación'],
+                            y=df_hist_tendencia['Cant_Maquinas'],
+                            name='Equipos con AutoTrac',
+                            marker_color='rgba(180, 180, 180, 0.4)',
+                            yaxis='y'
+                        )
+                    )
+
+                    # Línea para el histórico de Pulsación (Eje Y derecho)
+                    fig_pulv_hist.add_trace(
+                        go.Scatter(
+                            x=df_hist_tendencia['Fecha de terminación'],
+                            y=df_hist_tendencia['Prom_Pulsacion'],
+                            name='% Pulsación Activo',
+                            line=dict(color='#2ca02c', width=3),
+                            yaxis='y2'
+                        )
+                    )
+
+                    # Línea para el histórico de Control de Secciones (Eje Y derecho)
+                    fig_pulv_hist.add_trace(
+                        go.Scatter(
+                            x=df_hist_tendencia['Fecha de terminación'],
+                            y=df_hist_tendencia['Prom_Secciones'],
+                            name='% Control de Secciones',
+                            line=dict(color='#9467bd', width=3),
+                            yaxis='y2'
+                        )
+                    )
+
+                    # Línea para el histórico de AutoTrac (Eje Y derecho)
+                    fig_pulv_hist.add_trace(
+                        go.Scatter(
+                            x=df_hist_tendencia['Fecha de terminación'],
+                            y=df_hist_tendencia['Prom_AutoTrac'],
+                            name='% AutoTrac™',
+                            line=dict(color='orange', width=3),
+                            yaxis='y2'
+                        )
+                    )
+
+                    # Configuración de los dos ejes Y y el diseño
+                    fig_pulv_hist.update_layout(
+                        xaxis=dict(title='Fecha de Cierre'),
+                        yaxis=dict(title='Cantidad de Equipos con AutoTrac', side='left'),
+                        yaxis2=dict(title='Uso Promedio (%)', side='right', overlaying='y', range=[0, 100]),
+                        legend=dict(x=0, y=1.1, orientation='h'),
+                        hovermode='x unified',
+                        height=450
+                    )
+
+                    st.plotly_chart(fig_pulv_hist, use_container_width=True)
+
+                st.divider()
+
+                # 5. Gráficos de Torta: Adopción por Tecnología con Hover Corregido
+                st.subheader("🎯 Estado de Adopción por Tecnología (Último Reporte)")
+
+                if not df_pulv_actual.empty:
+                    col_pie1, col_pie2, col_pie3 = st.columns(3)
+                    mapa_colores = {'Con Uso': '#2ca02c', 'Sin Datos / Bajo Uso': '#d62728'}
+
+                    with col_pie1:
+                        df_pie_at = df_pulv_actual.copy()
+                        df_pie_at['Estado_AT'] = np.where(
+                            df_pie_at[col_at_pulv].notnull() & (df_pie_at[col_at_pulv] >= 1.0), 'Con Uso',
+                            'Sin Datos / Bajo Uso')
+
+                        df_counts_at = df_pie_at.groupby('Estado_AT').size().reset_index(name='Cant. Equip')
+
+                        fig_pie_at = px.pie(df_counts_at, names='Estado_AT', values='Cant. Equip',
+                                            title='Equipos con AutoTrac™',
+                                            hole=0.4, color='Estado_AT', color_discrete_map=mapa_colores)
+
+                        # CORRECCIÓN: Eliminado 'hoisttext' y configurado el template del hover interactivo
+                        fig_pie_at.update_traces(textinfo='percent+label',
+                                                 hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>")
+                        st.plotly_chart(fig_pie_at, use_container_width=True)
+
+                    with col_pie2:
+                        df_pie_sec = df_pulv_actual.copy()
+                        df_pie_sec['Estado_Sec'] = np.where(
+                            df_pie_sec[col_secciones].notnull() & (df_pie_sec[col_secciones] >= 1.0), 'Con Uso',
+                            'Sin Datos / Bajo Uso')
+
+                        df_counts_sec = df_pie_sec.groupby('Estado_Sec').size().reset_index(name='Cant. Equip')
+
+                        fig_pie_sec = px.pie(df_counts_sec, names='Estado_Sec', values='Cant. Equip',
+                                             title='Equipos con Control de Secciones',
+                                             hole=0.4, color='Estado_Sec', color_discrete_map=mapa_colores)
+
+                        fig_pie_sec.update_traces(textinfo='percent+label',
+                                                  hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>")
+                        st.plotly_chart(fig_pie_sec, use_container_width=True)
+
+                    with col_pie3:
+                        df_pie_puls = df_pulv_actual.copy()
+                        df_pie_puls['Estado_Puls'] = np.where(
+                            df_pie_puls[col_pulsacion].notnull() & (df_pie_puls[col_pulsacion] >= 1.0), 'Con Uso',
+                            'Sin Datos / Bajo Uso')
+
+                        df_counts_puls = df_pie_puls.groupby('Estado_Puls').size().reset_index(name='Cant. Equip')
+
+                        fig_pie_puls = px.pie(df_counts_puls, names='Estado_Puls', values='Cant. Equip',
+                                              title='Equipos con ExactApply (Pulsación)',
+                                              hole=0.4, color='Estado_Puls', color_discrete_map=mapa_colores)
+
+                        fig_pie_puls.update_traces(textinfo='percent+label',
+                                                   hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>")
+                        st.plotly_chart(fig_pie_puls, use_container_width=True)
+                        
 else:
     st.info("👋 ¡Hola Suyai! No se detectaron datos cargados automáticamente. Si la conexión a la nube falló, usá el cargador manual de la barra lateral.")
