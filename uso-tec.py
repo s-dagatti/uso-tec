@@ -155,6 +155,7 @@ if df_raw is not None:
             df_lic_raw.columns = [c.strip() for c in df_lic_raw.columns]
             df_lic_raw['Sucursal'] = df_lic_raw['Sucursal'].fillna("Sin Asignar").astype(str).str.strip()
             df_lic_raw['Nombre de licencia'] = df_lic_raw['Nombre de licencia'].fillna("Sin Nombre").astype(str).str.strip()
+            df_lic_raw['Nombre del cliente'] = df_lic_raw['Nombre del cliente'].fillna("Sin Organización").astype(str).str.strip()
             
             # --- PARSEO SEGURO DE FECHAS ANTES DE FILTRAR ---
             meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
@@ -255,19 +256,16 @@ if df_raw is not None:
             # 5. GRÁFICO HISTÓRICO DE VENCIMIENTOS CON FILTRO DESPLAZABLE DE FECHAS
             st.subheader("📅 Cronograma Histórico de Vencimientos")
             
-            # Filtramos solo registros que posean una fecha real de vencimiento mapeada
             df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
             
             if not df_venc.empty:
                 min_date = df_venc['Fecha_Real'].min().date()
                 max_date = df_venc['Fecha_Real'].max().date()
                 
-                # Evitamos que falle el slider si todas las licencias filtradas vencen el mismo día
                 if min_date == max_date:
                     st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
                     df_venc_final = df_venc.copy()
                 else:
-                    # FILTRO DESPLAZABLE (Slider de rango de fechas)
                     rango_fechas = st.slider(
                         "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
                         min_value=min_date,
@@ -276,14 +274,12 @@ if df_raw is not None:
                         format="DD/MM/YYYY"
                     )
                     
-                    # Filtrar el dataframe según el rango del slider
                     df_venc_final = df_venc[
                         (df_venc['Fecha_Real'].dt.date >= rango_fechas[0]) & 
                         (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
                     ].copy()
 
                 if not df_venc_final.empty:
-                    # Creamos agrupación por período Año-Mes
                     df_venc_final['Mes_Vencimiento'] = df_venc_final['Fecha_Real'].dt.to_period('M')
                     df_venc_grouped = df_venc_final.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
                     df_venc_grouped['Mes_Vencimiento'] = df_venc_grouped['Mes_Vencimiento'].astype(str)
@@ -308,9 +304,57 @@ if df_raw is not None:
                     )
                     st.plotly_chart(fig_hist_venc, use_container_width=True)
                 else:
-                    st.info("No hay licencias que venzan dentro del rango de fechas seleccionado en el control deslizante.")
+                    st.info("No hay licencias que venzan dentro del rango de fechas seleccionado.")
             else:
-                st.info("No hay licencias con fechas de vencimiento válidas registradas para los filtros aplicados.")
+                st.info("No hay licencias con fechas de vencimiento válidas para los filtros aplicados.")
+                
+            st.divider()
+
+            # 6. SECCIÓN DE TABLA DETALLADA CON FILTRO DE ORGANIZACIÓN
+            st.subheader("🔍 Listado Detallado de Licencias")
+            
+            # Tomamos la lista de organizaciones disponibles según los filtros previos (Sucursal/Tipo Licencia)
+            lista_orgs = sorted(df_lic_filtrado['Nombre del cliente'].unique())
+            org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
+            
+            # Filtrar dataframe final para la tabla
+            if org_sel != "Todas":
+                df_tabla_final = df_lic_filtrado[df_lic_filtrado['Nombre del cliente'] == org_sel].copy()
+            else:
+                df_tabla_final = df_lic_filtrado.copy()
+            
+            if not df_tabla_final.empty:
+                # Diccionario de columnas origen y el mapeo final solicitado
+                columnas_mostrar = {
+                    'Número de licencia': 'numero de licencia',
+                    'Nombre del cliente': 'organización',
+                    'Modelo': 'Modelo de maquina',
+                    'Nombre de licencia': 'Nombre de licencia',
+                    'Estado': 'Estado',
+                    'Fecha de inicio': 'Fecha de inicio',
+                    'Fecha de terminación': 'Fecha de terminacion',
+                    'Sucursal': 'Sucursal'
+                }
+                
+                # Extraemos las columnas nativas del DataFrame filtrado
+                df_display = df_tabla_final[list(columnas_mostrar.keys())].copy()
+                df_display = df_display.rename(columns=columnas_mostrar)
+                
+                # Duplicamos la columna mapeada para generar 'Fecha de vencimiento' tal como se solicitó
+                df_display['Fecha de vencimiento'] = df_display['Fecha de terminacion']
+                
+                # Reordenamos las columnas exactamente según tu lista limpia
+                orden_columnas = [
+                    'numero de licencia', 'organización', 'Modelo de maquina', 'Nombre de licencia',
+                    'Estado', 'Fecha de inicio', 'Fecha de terminacion', 'Fecha de vencimiento', 'Sucursal'
+                ]
+                df_display = df_display[orden_columnas]
+                
+                # Mostramos la tabla interactiva
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+                st.caption(f"Mostrando {len(df_display)} registros encontrados.")
+            else:
+                st.info("No hay registros para mostrar con los criterios seleccionados.")
                 
         else:
             st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
