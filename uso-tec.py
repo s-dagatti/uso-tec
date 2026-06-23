@@ -154,16 +154,44 @@ if df_raw is not None:
             # 1. Limpieza rápida de columnas por si hay espacios
             df_lic_raw.columns = [c.strip() for c in df_lic_raw.columns]
             df_lic_raw['Sucursal'] = df_lic_raw['Sucursal'].fillna("Sin Asignar").astype(str).str.strip()
+            df_lic_raw['Nombre de licencia'] = df_lic_raw['Nombre de licencia'].fillna("Sin Nombre").astype(str).str.strip()
             
-            # 2. FILTRO POR SUCURSAL (Arriba de todo)
-            lista_sucursales = sorted(df_lic_raw['Sucursal'].unique())
-            sucursal_sel = st.selectbox("🏢 Filtrar por Sucursal:", ["Todas"] + lista_sucursales, key="sb_lic_sucursal")
+            # --- PARSEO SEGURO DE FECHAS ANTES DE FILTRAR ---
+            meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
+                        'jul': 'Jul', 'ago': 'Aug', 'sept': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'}
             
-            # Aplicamos el filtro al DataFrame que usaremos en toda la pestaña
+            def parsear_fecha_es(fecha_str):
+                if pd.isna(fecha_str) or str(fecha_str).strip() == '---':
+                    return pd.NaT
+                fecha_str = str(fecha_str).lower().strip()
+                for es, en in meses_es.items():
+                    if es in fecha_str:
+                        fecha_str = fecha_str.replace(es, en)
+                        break
+                try:
+                    return pd.to_datetime(fecha_str, format='%d %b %Y', errors='coerce')
+                except:
+                    return pd.to_datetime(fecha_str, errors='coerce')
+
+            df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
+            
+            # 2. FILTROS PRINCIPALES (Lado a Lado arriba de todo)
+            col_filtros1, col_filtros2 = st.columns(2)
+            
+            with col_filtros1:
+                lista_sucursales = sorted(df_lic_raw['Sucursal'].unique())
+                sucursal_sel = st.selectbox("🏢 Filtrar por Sucursal:", ["Todas"] + lista_sucursales, key="sb_lic_sucursal")
+                
+            with col_filtros2:
+                lista_licencias = sorted(df_lic_raw['Nombre de licencia'].unique())
+                licencia_sel = st.selectbox("🪪 Filtrar por Tipo de Licencia:", ["Todas"] + lista_licencias, key="sb_lic_tipo")
+            
+            # Aplicamos cascada de filtros generales para KPIs y primeros gráficos
+            df_lic_filtrado = df_lic_raw.copy()
             if sucursal_sel != "Todas":
-                df_lic_filtrado = df_lic_raw[df_lic_raw['Sucursal'] == sucursal_sel].copy()
-            else:
-                df_lic_filtrado = df_lic_raw.copy()
+                df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Sucursal'] == sucursal_sel]
+            if licencia_sel != "Todas":
+                df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Nombre de licencia'] == licencia_sel]
             
             # 3. Conteo de estados sobre los datos filtrados
             activas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'Activo'])
@@ -197,13 +225,12 @@ if df_raw is not None:
                     )
                     st.plotly_chart(fig_pie_lic, use_container_width=True)
                 else:
-                    st.info("No hay datos para mostrar en esta sucursal.")
+                    st.info("No hay datos para mostrar con los filtros seleccionados.")
                 
             with col_graf2:
-                st.subheader("🏢 Distribución General por Sucursal")
-                # Mostramos cómo impacta la sucursal seleccionada vs las demás
-                df_bar_lic = df_lic_filtrado.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
-                if not df_bar_lic.empty:
+                st.subheader("🏢 Distribución por Sucursal")
+                if not df_lic_filtrado.empty:
+                    df_bar_lic = df_lic_filtrado.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
                     fig_bar_lic = px.bar(
                         df_bar_lic,
                         x='Sucursal',
@@ -225,44 +252,41 @@ if df_raw is not None:
 
             st.divider()
 
-            # 5. GRÁFICO HISTÓRICO DE VENCIMIENTOS POR MES
-            st.subheader("📅 Cronograma Histórico de Vencimientos (Por Mes)")
+            # 5. GRÁFICO HISTÓRICO DE VENCIMIENTOS CON FILTRO DESPLAZABLE DE FECHAS
+            st.subheader("📅 Cronograma Histórico de Vencimientos")
             
-            # Filtrar filas que tengan una fecha válida de terminación (evitando los '---')
-            df_venc = df_lic_filtrado[df_lic_filtrado['Fecha de terminación'].notnull() & (df_lic_filtrado['Fecha de terminación'] != '---')].copy()
+            # Filtramos solo registros que posean una fecha real de vencimiento mapeada
+            df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
             
             if not df_venc.empty:
-                # Diccionario para mapear meses en español al parsear
-                meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
-                            'jul': 'Jul', 'ago': 'Aug', 'sept': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'}
+                min_date = df_venc['Fecha_Real'].min().date()
+                max_date = df_venc['Fecha_Real'].max().date()
                 
-                def parsear_fecha_es(fecha_str):
-                    if pd.isna(fecha_str):
-                        return pd.NaT
-                    fecha_str = str(fecha_str).lower().strip()
-                    for es, en in meses_es.items():
-                        if es in fecha_str:
-                            fecha_str = fecha_str.replace(es, en)
-                            break
-                    try:
-                        return pd.to_datetime(fecha_str, format='%d %b %Y', errors='coerce')
-                    except:
-                        return pd.to_datetime(fecha_str, errors='coerce')
+                # Evitamos que falle el slider si todas las licencias filtradas vencen el mismo día
+                if min_date == max_date:
+                    st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
+                    df_venc_final = df_venc.copy()
+                else:
+                    # FILTRO DESPLAZABLE (Slider de rango de fechas)
+                    rango_fechas = st.slider(
+                        "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
+                        min_value=min_date,
+                        max_value=max_date,
+                        value=(min_date, max_date),
+                        format="DD/MM/YYYY"
+                    )
+                    
+                    # Filtrar el dataframe según el rango del slider
+                    df_venc_final = df_venc[
+                        (df_venc['Fecha_Real'].dt.date >= rango_fechas[0]) & 
+                        (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
+                    ].copy()
 
-                # Aplicamos la conversión a fecha real
-                df_venc['Fecha_Real'] = df_venc['Fecha de terminación'].apply(parsear_fecha_es)
-                df_venc = df_venc[df_venc['Fecha_Real'].notnull()]
-                
-                if not df_venc.empty:
-                    # Creamos la columna de Período Año-Mes para agrupar cronológicamente
-                    df_venc['Mes_Vencimiento'] = df_venc['Fecha_Real'].dt.to_period('M')
-                    
-                    # Agrupamos por mes y tipo de licencia para ver qué se cae cada mes
-                    df_venc_grouped = df_venc.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
-                    # Convertimos el período a String para que Plotly lo pueda graficar en el eje X
+                if not df_venc_final.empty:
+                    # Creamos agrupación por período Año-Mes
+                    df_venc_final['Mes_Vencimiento'] = df_venc_final['Fecha_Real'].dt.to_period('M')
+                    df_venc_grouped = df_venc_final.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
                     df_venc_grouped['Mes_Vencimiento'] = df_venc_grouped['Mes_Vencimiento'].astype(str)
-                    
-                    # Ordenamos cronológicamente
                     df_venc_grouped = df_venc_grouped.sort_values('Mes_Vencimiento')
                     
                     fig_hist_venc = px.bar(
@@ -270,7 +294,6 @@ if df_raw is not None:
                         x='Mes_Vencimiento',
                         y='Cantidad',
                         color='Nombre de licencia',
-                        title="Licencias a Vencer por Mes",
                         barmode='stack',
                         text_auto=True,
                         color_discrete_sequence=px.colors.qualitative.Safe
@@ -285,9 +308,9 @@ if df_raw is not None:
                     )
                     st.plotly_chart(fig_hist_venc, use_container_width=True)
                 else:
-                    st.info("No se pudieron procesar los formatos de fecha para los vencimientos.")
+                    st.info("No hay licencias que venzan dentro del rango de fechas seleccionado en el control deslizante.")
             else:
-                st.info("No hay licencias con fechas de terminación registradas para los filtros seleccionados.")
+                st.info("No hay licencias con fechas de vencimiento válidas registradas para los filtros aplicados.")
                 
         else:
             st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
