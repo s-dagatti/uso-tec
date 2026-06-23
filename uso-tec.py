@@ -27,13 +27,21 @@ def cargar_datos_desde_github(url):
 # --- 1. FUNCIONES DE PROCESAMIENTO ---
 def procesar_datos_base(df):
     df.columns = [c.strip() for c in df.columns]
-    df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
+    
+    # Manejo especial si la columna 'Fecha de terminación' viene duplicada
+    if isinstance(df['Fecha de terminación'], pd.DataFrame):
+        df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'].iloc[:, 0], errors='coerce')
+    else:
+        df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
+        
     cols_tech = [c for c in df.columns if any(k.lower() in c.lower() for k in ['activo (%)', 'activado (%)'])]
     for col in cols_tech:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        if df[col].max() <= 1.1 and df[col].max() > 0:
-            df[col] = df[col] * 100
+        
+        # YA NO MULTIPLICAMOS POR 100 porque los datos ya vienen como enteros/decimales de porcentaje (ej: 12.5)
+        # Filtro de ruido: Si querés seguir ignorando registros menores al 1% de uso, dejamos esta línea:
         df.loc[df[col] < 1.0, col] = np.nan
+        
     return df
 
 
