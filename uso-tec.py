@@ -156,6 +156,7 @@ if df_raw is not None:
             df_lic_raw['Sucursal'] = df_lic_raw['Sucursal'].fillna("Sin Asignar").astype(str).str.strip()
             df_lic_raw['Nombre de licencia'] = df_lic_raw['Nombre de licencia'].fillna("Sin Nombre").astype(str).str.strip()
             df_lic_raw['Nombre del cliente'] = df_lic_raw['Nombre del cliente'].fillna("Sin Organización").astype(str).str.strip()
+            df_lic_raw['Estado'] = df_lic_raw['Estado'].fillna("Sin Estado").astype(str).str.strip()
             
             # --- PARSEO SEGURO DE FECHAS PARA EL GRÁFICO HISTÓRICO ---
             meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
@@ -174,10 +175,10 @@ if df_raw is not None:
                 except:
                     return pd.to_datetime(fecha_str, errors='coerce')
 
-            # Usamos 'Fecha de terminación' para la lógica interna del gráfico cronológico
+            # Usamos 'Fecha de terminación' exclusivamente para el gráfico cronológico de arriba
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
-            # 2. FILTROS PRINCIPALES (Lado a Lado arriba de todo)
+            # 2. FILTROS PRINCIPALES (Arriba de todo)
             col_filtros1, col_filtros2 = st.columns(2)
             
             with col_filtros1:
@@ -311,21 +312,29 @@ if df_raw is not None:
                 
             st.divider()
 
-            # 6. SECCIÓN DE TABLA DETALLADA CON FILTRO DE ORGANIZACIÓN
+            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS DE ORGANIZACIÓN Y ESTADO (LADO A LADO)
             st.subheader("🔍 Listado Detallado de Licencias")
             
-            # Lista de organizaciones disponibles según los filtros de arriba
-            lista_orgs = sorted(df_lic_filtrado['Nombre del cliente'].unique())
-            org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
+            # Filtro de organización y filtro de estado usando los datos puros de la columna Estado
+            col_tbl_filtro1, col_tbl_filtro2 = st.columns(2)
             
-            # Filtrar dataframe final para la tabla
+            with col_tbl_filtro1:
+                lista_orgs = sorted(df_lic_filtrado['Nombre del cliente'].unique())
+                org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
+                
+            with col_tbl_filtro2:
+                lista_estados = sorted(df_lic_filtrado['Estado'].unique())
+                estado_sel = st.selectbox("🟢 Filtrar por Estado de Licencia:", ["Todos"] + lista_estados, key="sb_lic_estado_tbl")
+            
+            # Filtrar dataframe final combinando ambos criterios para la tabla
+            df_tabla_final = df_lic_filtrado.copy()
             if org_sel != "Todas":
-                df_tabla_final = df_lic_filtrado[df_lic_filtrado['Nombre del cliente'] == org_sel].copy()
-            else:
-                df_tabla_final = df_lic_filtrado.copy()
+                df_tabla_final = df_tabla_final[df_tabla_final['Nombre del cliente'] == org_sel]
+            if estado_sel != "Todos":
+                df_tabla_final = df_tabla_final[df_tabla_final['Estado'] == estado_sel]
             
             if not df_tabla_final.empty:
-                # Diccionario mapeando la columna exacta del CSV con tu lista limpia en minúsculas/mayúsculas requeridas
+                # Mapeo estricto e independiente de las columnas reales de tu CSV
                 columnas_mapeo = {
                     'Número de licencia': 'numero de licencia',
                     'Nombre del cliente': 'organización',
@@ -342,14 +351,14 @@ if df_raw is not None:
                 df_display = df_tabla_final[list(columnas_mapeo.keys())].copy()
                 df_display = df_display.rename(columns=columnas_mapeo)
                 
-                # Reordenamos las columnas exactamente según el esquema final solicitado
+                # Reordenamos las columnas exactamente según tu lista limpia
                 orden_columnas = [
                     'numero de licencia', 'organización', 'Modelo de maquina', 'Nombre de licencia',
                     'Estado', 'Fecha de inicio', 'Fecha de terminacion', 'Fecha de vencimiento', 'Sucursal'
                 ]
                 df_display = df_display[orden_columnas]
                 
-                # Desplegamos el DataFrame puro en Streamlit
+                # Desplegamos el DataFrame
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
                 st.caption(f"Mostrando {len(df_display)} registros encontrados.")
             else:
