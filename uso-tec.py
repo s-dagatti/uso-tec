@@ -143,8 +143,9 @@ if df_raw is not None:
         ["🪪 Gestión de Licencias", "🌡️ Termómetro General", "Análisis Tier 1: AutoTrac", "Análisis Tier 2: Avanzado", "Cosechadoras", "CropCare"]
     )
 
+
     # ---------------------------------------------------------
-    # TAB 0: GESTIÓN DE LICENCIAS (NUEVA)
+    # TAB 0: GESTIÓN DE LICENCIAS
     # ---------------------------------------------------------
     with tab0:
         st.header("🪪 Control y Estado de Licencias")
@@ -165,10 +166,7 @@ if df_raw is not None:
             
             st.divider()
             
-            # Gráfico de Torta por Nombre de Licencia
-st.divider()
-            
-            # CREAMOS DOS COLUMNAS DE IGUAL TAMAÑO PARA LOS GRÁFICOS
+            # CONTROLAR SANGRE ACÁ: Las columnas de gráficos van alineadas con el st.divider()
             col_graf1, col_graf2 = st.columns(2)
             
             with col_graf1:
@@ -197,13 +195,12 @@ st.divider()
                 # Agrupamos por Sucursal y Nombre de licencia para el conteo
                 df_bar_lic = df_lic_raw.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
                 
-                # Creamos el gráfico de barras (barmode='stack' las apila, si preferís lado a lado cambiá por 'group')
+                # Creamos el gráfico de barras apiladas
                 fig_bar_lic = px.bar(
                     df_bar_lic,
                     x='Sucursal',
                     y='Cantidad',
                     color='Nombre de licencia',
-                    title="Conteo de Licencias",
                     barmode='stack', 
                     text_auto=True,
                     color_discrete_sequence=px.colors.qualitative.Pastel
@@ -216,6 +213,8 @@ st.divider()
                     hovermode="x unified"
                 )
                 st.plotly_chart(fig_bar_lic, use_container_width=True)
+        else:
+            st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
 
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
