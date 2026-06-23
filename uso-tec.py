@@ -11,6 +11,7 @@ st.set_page_config(page_title="Dashboard Tecnología Conci", layout="wide")
 # --- 0. CONFIGURACIÓN DEL LAGO DE DATOS EN GITHUB ---
 # Corregido a formato RAW para que Pandas pueda leerlo directamente
 URL_GITHUB_RAW = "https://raw.githubusercontent.com/s-dagatti/uso-tec/main/Hoja%201.csv"
+URL_LICENCIAS_RAW = "https://raw.githubusercontent.com/s-dagatti/uso-tec/main/Licencias.csv"
 
 
 @st.cache_data(ttl=300)  # Se cachea por 5 minutos para que la navegación sea ultra rápida
@@ -68,6 +69,7 @@ st.sidebar.header("Estado de los Datos")
 
 # Carga automática e independiente de SharePoint o PCs locales
 df_raw = cargar_datos_desde_github(URL_GITHUB_RAW)
+df_lic_raw = cargar_datos_desde_github(URL_LICENCIAS_RAW)
 
 if df_raw is not None:
     st.sidebar.success("✅ Base de datos en la nube conectada")
@@ -137,11 +139,50 @@ if df_raw is not None:
     df_aptas_latest = df_latest[df_latest['Es_Apta'] == True].copy()
 
  # --- NAVEGACIÓN ---
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["🌡️ Termómetro General", "Análisis Tier 1: AutoTrac", "Análisis Tier 2: Avanzado", "Cosechadoras",
-         "CropCare"]
+    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["🪪 Gestión de Licencias", "🌡️ Termómetro General", "Análisis Tier 1: AutoTrac", "Análisis Tier 2: Avanzado", "Cosechadoras", "CropCare"]
     )
 
+    # ---------------------------------------------------------
+    # TAB 0: GESTIÓN DE LICENCIAS (NUEVA)
+    # ---------------------------------------------------------
+    with tab0:
+        st.header("🪪 Control y Estado de Licencias")
+        
+        if df_lic_raw is not None:
+            # Limpieza rápida de columnas por si hay espacios
+            df_lic_raw.columns = [c.strip() for c in df_lic_raw.columns]
+            
+            # Conteo de estados
+            activas = len(df_lic_raw[df_lic_raw['Estado'] == 'Activo'])
+            no_activadas = len(df_lic_raw[df_lic_raw['Estado'] == 'No activado'])
+            
+            # Columnas de KPI
+            kpi1, kpi2, kpi3 = st.columns(3)
+            kpi1.metric("Licencias Activas", activas)
+            kpi2.metric("Licencias No Activadas", no_activadas)
+            kpi3.metric("Total Licencias", len(df_lic_raw))
+            
+            st.divider()
+            
+            # Gráfico de Torta por Nombre de Licencia
+            st.subheader("📊 Distribución por Tipo de Licencia")
+            df_pie_lic = df_lic_raw.groupby('Nombre de licencia').size().reset_index(name='Cantidad')
+            
+            fig_pie_lic = px.pie(
+                df_pie_lic, 
+                names='Nombre de licencia', 
+                values='Cantidad',
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            fig_pie_lic.update_traces(
+                textinfo='percent+label',
+                hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>"
+            )
+            st.plotly_chart(fig_pie_lic, use_container_width=True)
+        else:
+            st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
 
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
