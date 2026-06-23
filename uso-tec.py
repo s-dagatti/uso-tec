@@ -158,7 +158,7 @@ if df_raw is not None:
             df_lic_raw['Nombre del cliente'] = df_lic_raw['Nombre del cliente'].fillna("Sin Organización").astype(str).str.strip()
             df_lic_raw['Estado'] = df_lic_raw['Estado'].fillna("Sin Estado").astype(str).str.strip()
             
-            # --- PARSEO SEGURO DE FECHAS PARA EL GRÁFICO HISTÓRICO ---
+            # --- PARSEO SEGURO DE FECHAS PARA EL GRÁFICO HISTÓRICO Y TABLA ---
             meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
                         'jul': 'Jul', 'ago': 'Aug', 'sept': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'}
             
@@ -175,7 +175,7 @@ if df_raw is not None:
                 except:
                     return pd.to_datetime(fecha_str, errors='coerce')
 
-            # Usamos 'Fecha de terminación' exclusivamente para el gráfico cronológico de arriba
+            # Usamos 'Fecha de terminación' exclusivamente para el gráfico cronológico y filtros temporales
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
             # 2. FILTROS PRINCIPALES (Arriba de todo)
@@ -260,6 +260,9 @@ if df_raw is not None:
             
             df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
             
+            # Declaramos el DataFrame base para la tabla detallada (por defecto hereda lo filtrado arriba)
+            df_acumulado_filtros = df_lic_filtrado.copy()
+            
             if not df_venc.empty:
                 min_date = df_venc['Fecha_Real'].min().date()
                 max_date = df_venc['Fecha_Real'].max().date()
@@ -267,6 +270,7 @@ if df_raw is not None:
                 if min_date == max_date:
                     st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
                     df_venc_final = df_venc.copy()
+                    df_acumulado_filtros = df_venc.copy()  # Mismo día para la tabla
                 else:
                     rango_fechas = st.slider(
                         "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
@@ -279,6 +283,12 @@ if df_raw is not None:
                     df_venc_final = df_venc[
                         (df_venc['Fecha_Real'].dt.date >= rango_fechas[0]) & 
                         (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
+                    ].copy()
+                    
+                    # ⚠️ CRUCIAL: Modificamos el acumulado para la tabla respetando el rango del slider
+                    df_acumulado_filtros = df_lic_filtrado[
+                        (df_lic_filtrado['Fecha_Real'].dt.date >= rango_fechas[0]) & 
+                        (df_lic_filtrado['Fecha_Real'].dt.date <= rango_fechas[1])
                     ].copy()
 
                 if not df_venc_final.empty:
@@ -312,22 +322,22 @@ if df_raw is not None:
                 
             st.divider()
 
-            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS DE ORGANIZACIÓN Y ESTADO (LADO A LADO)
+            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS EN CASCADA (Sincronizados con el Slider)
             st.subheader("🔍 Listado Detallado de Licencias")
             
-            # Filtro de organización y filtro de estado usando los datos puros de la columna Estado
+            # Los combos de abajo ahora se arman sobre df_acumulado_filtros (que ya tiene Sucursal, Tipo y Fechas aplicadas)
             col_tbl_filtro1, col_tbl_filtro2 = st.columns(2)
             
             with col_tbl_filtro1:
-                lista_orgs = sorted(df_lic_filtrado['Nombre del cliente'].unique())
+                lista_orgs = sorted(df_acumulado_filtros['Nombre del cliente'].unique())
                 org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
                 
             with col_tbl_filtro2:
-                lista_estados = sorted(df_lic_filtrado['Estado'].unique())
+                lista_estados = sorted(df_acumulado_filtros['Estado'].unique())
                 estado_sel = st.selectbox("🟢 Filtrar por Estado de Licencia:", ["Todos"] + lista_estados, key="sb_lic_estado_tbl")
             
-            # Filtrar dataframe final combinando ambos criterios para la tabla
-            df_tabla_final = df_lic_filtrado.copy()
+            # Filtrar dataframe final combinando el acumulado previo con la organización y el estado seleccionados
+            df_tabla_final = df_acumulado_filtros.copy()
             if org_sel != "Todas":
                 df_tabla_final = df_tabla_final[df_tabla_final['Nombre del cliente'] == org_sel]
             if estado_sel != "Todos":
