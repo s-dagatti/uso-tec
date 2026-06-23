@@ -157,7 +157,7 @@ if df_raw is not None:
             df_lic_raw['Nombre de licencia'] = df_lic_raw['Nombre de licencia'].fillna("Sin Nombre").astype(str).str.strip()
             df_lic_raw['Nombre del cliente'] = df_lic_raw['Nombre del cliente'].fillna("Sin Organización").astype(str).str.strip()
             
-            # --- PARSEO SEGURO DE FECHAS ANTES DE FILTRAR ---
+            # --- PARSEO SEGURO DE FECHAS PARA EL GRÁFICO HISTÓRICO ---
             meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
                         'jul': 'Jul', 'ago': 'Aug', 'sept': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'}
             
@@ -174,6 +174,7 @@ if df_raw is not None:
                 except:
                     return pd.to_datetime(fecha_str, errors='coerce')
 
+            # Usamos 'Fecha de terminación' para la lógica interna del gráfico cronológico
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
             # 2. FILTROS PRINCIPALES (Lado a Lado arriba de todo)
@@ -313,7 +314,7 @@ if df_raw is not None:
             # 6. SECCIÓN DE TABLA DETALLADA CON FILTRO DE ORGANIZACIÓN
             st.subheader("🔍 Listado Detallado de Licencias")
             
-            # Tomamos la lista de organizaciones disponibles según los filtros previos (Sucursal/Tipo Licencia)
+            # Lista de organizaciones disponibles según los filtros de arriba
             lista_orgs = sorted(df_lic_filtrado['Nombre del cliente'].unique())
             org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
             
@@ -324,8 +325,8 @@ if df_raw is not None:
                 df_tabla_final = df_lic_filtrado.copy()
             
             if not df_tabla_final.empty:
-                # Diccionario de columnas origen y el mapeo final solicitado
-                columnas_mostrar = {
+                # Diccionario mapeando la columna exacta del CSV con tu lista limpia en minúsculas/mayúsculas requeridas
+                columnas_mapeo = {
                     'Número de licencia': 'numero de licencia',
                     'Nombre del cliente': 'organización',
                     'Modelo': 'Modelo de maquina',
@@ -333,24 +334,22 @@ if df_raw is not None:
                     'Estado': 'Estado',
                     'Fecha de inicio': 'Fecha de inicio',
                     'Fecha de terminación': 'Fecha de terminacion',
+                    'Fecha de vencimiento de pedido': 'Fecha de vencimiento',
                     'Sucursal': 'Sucursal'
                 }
                 
-                # Extraemos las columnas nativas del DataFrame filtrado
-                df_display = df_tabla_final[list(columnas_mostrar.keys())].copy()
-                df_display = df_display.rename(columns=columnas_mostrar)
+                # Extraemos y renombramos basándonos puramente en las columnas reales del archivo
+                df_display = df_tabla_final[list(columnas_mapeo.keys())].copy()
+                df_display = df_display.rename(columns=columnas_mapeo)
                 
-                # Duplicamos la columna mapeada para generar 'Fecha de vencimiento' tal como se solicitó
-                df_display['Fecha de vencimiento'] = df_display['Fecha de terminacion']
-                
-                # Reordenamos las columnas exactamente según tu lista limpia
+                # Reordenamos las columnas exactamente según el esquema final solicitado
                 orden_columnas = [
                     'numero de licencia', 'organización', 'Modelo de maquina', 'Nombre de licencia',
                     'Estado', 'Fecha de inicio', 'Fecha de terminacion', 'Fecha de vencimiento', 'Sucursal'
                 ]
                 df_display = df_display[orden_columnas]
                 
-                # Mostramos la tabla interactiva
+                # Desplegamos el DataFrame puro en Streamlit
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
                 st.caption(f"Mostrando {len(df_display)} registros encontrados.")
             else:
