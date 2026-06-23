@@ -151,68 +151,144 @@ if df_raw is not None:
         st.header("🪪 Control y Estado de Licencias")
         
         if df_lic_raw is not None:
-            # Limpieza rápida de columnas por si hay espacios
+            # 1. Limpieza rápida de columnas por si hay espacios
             df_lic_raw.columns = [c.strip() for c in df_lic_raw.columns]
+            df_lic_raw['Sucursal'] = df_lic_raw['Sucursal'].fillna("Sin Asignar").astype(str).str.strip()
             
-            # Conteo de estados
-            activas = len(df_lic_raw[df_lic_raw['Estado'] == 'Activo'])
-            no_activadas = len(df_lic_raw[df_lic_raw['Estado'] == 'No activado'])
+            # 2. FILTRO POR SUCURSAL (Arriba de todo)
+            lista_sucursales = sorted(df_lic_raw['Sucursal'].unique())
+            sucursal_sel = st.selectbox("🏢 Filtrar por Sucursal:", ["Todas"] + lista_sucursales, key="sb_lic_sucursal")
+            
+            # Aplicamos el filtro al DataFrame que usaremos en toda la pestaña
+            if sucursal_sel != "Todas":
+                df_lic_filtrado = df_lic_raw[df_lic_raw['Sucursal'] == sucursal_sel].copy()
+            else:
+                df_lic_filtrado = df_lic_raw.copy()
+            
+            # 3. Conteo de estados sobre los datos filtrados
+            activas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'Activo'])
+            no_activadas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'No activado'])
             
             # Columnas de KPI
             kpi1, kpi2, kpi3 = st.columns(3)
             kpi1.metric("Licencias Activas", activas)
             kpi2.metric("Licencias No Activadas", no_activadas)
-            kpi3.metric("Total Licencias", len(df_lic_raw))
+            kpi3.metric("Total Licencias", len(df_lic_filtrado))
             
             st.divider()
             
-            # CONTROLAR SANGRE ACÁ: Las columnas de gráficos van alineadas con el st.divider()
+            # 4. GRÁFICOS EN PARALELO (Torta y Barras por sucursal)
             col_graf1, col_graf2 = st.columns(2)
             
             with col_graf1:
                 st.subheader("📊 Distribución por Tipo de Licencia")
-                df_pie_lic = df_lic_raw.groupby('Nombre de licencia').size().reset_index(name='Cantidad')
-                
-                fig_pie_lic = px.pie(
-                    df_pie_lic, 
-                    names='Nombre de licencia', 
-                    values='Cantidad',
-                    hole=0.4,
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                fig_pie_lic.update_traces(
-                    textinfo='percent+label',
-                    hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>"
-                )
-                st.plotly_chart(fig_pie_lic, use_container_width=True)
+                if not df_lic_filtrado.empty:
+                    df_pie_lic = df_lic_filtrado.groupby('Nombre de licencia').size().reset_index(name='Cantidad')
+                    fig_pie_lic = px.pie(
+                        df_pie_lic, 
+                        names='Nombre de licencia', 
+                        values='Cantidad',
+                        hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Pastel
+                    )
+                    fig_pie_lic.update_traces(
+                        textinfo='percent+label',
+                        hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>"
+                    )
+                    st.plotly_chart(fig_pie_lic, use_container_width=True)
+                else:
+                    st.info("No hay datos para mostrar en esta sucursal.")
                 
             with col_graf2:
-                st.subheader("🏢 Licencias por Sucursal y Tipo")
+                st.subheader("🏢 Distribución General por Sucursal")
+                # Mostramos cómo impacta la sucursal seleccionada vs las demás
+                df_bar_lic = df_lic_filtrado.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
+                if not df_bar_lic.empty:
+                    fig_bar_lic = px.bar(
+                        df_bar_lic,
+                        x='Sucursal',
+                        y='Cantidad',
+                        color='Nombre de licencia',
+                        barmode='stack', 
+                        text_auto=True,
+                        color_discrete_sequence=px.colors.qualitative.Pastel
+                    )
+                    fig_bar_lic.update_layout(
+                        xaxis_title="Sucursal",
+                        yaxis_title="Cantidad de Licencias",
+                        legend_title="Tipo de Licencia",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_bar_lic, use_container_width=True)
+                else:
+                    st.info("No hay datos para mostrar.")
+
+            st.divider()
+
+            # 5. GRÁFICO HISTÓRICO DE VENCIMIENTOS POR MES
+            st.subheader("📅 Cronograma Histórico de Vencimientos (Por Mes)")
+            
+            # Filtrar filas que tengan una fecha válida de terminación (evitando los '---')
+            df_venc = df_lic_filtrado[df_lic_filtrado['Fecha de terminación'].notnull() & (df_lic_filtrado['Fecha de terminación'] != '---')].copy()
+            
+            if not df_venc.empty:
+                # Diccionario para mapear meses en español al parsear
+                meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
+                            'jul': 'Jul', 'ago': 'Aug', 'sept': 'Sep', 'oct': 'Oct', 'nov': 'Nov', 'dic': 'Dec'}
                 
-                # Rellenamos nulos en Sucursal por si las dudas
-                df_lic_raw['Sucursal'] = df_lic_raw['Sucursal'].fillna("Sin Asignar").astype(str)
+                def parsear_fecha_es(fecha_str):
+                    if pd.isna(fecha_str):
+                        return pd.NaT
+                    fecha_str = str(fecha_str).lower().strip()
+                    for es, en in meses_es.items():
+                        if es in fecha_str:
+                            fecha_str = fecha_str.replace(es, en)
+                            break
+                    try:
+                        return pd.to_datetime(fecha_str, format='%d %b %Y', errors='coerce')
+                    except:
+                        return pd.to_datetime(fecha_str, errors='coerce')
+
+                # Aplicamos la conversión a fecha real
+                df_venc['Fecha_Real'] = df_venc['Fecha de terminación'].apply(parsear_fecha_es)
+                df_venc = df_venc[df_venc['Fecha_Real'].notnull()]
                 
-                # Agrupamos por Sucursal y Nombre de licencia para el conteo
-                df_bar_lic = df_lic_raw.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
+                if not df_venc.empty:
+                    # Creamos la columna de Período Año-Mes para agrupar cronológicamente
+                    df_venc['Mes_Vencimiento'] = df_venc['Fecha_Real'].dt.to_period('M')
+                    
+                    # Agrupamos por mes y tipo de licencia para ver qué se cae cada mes
+                    df_venc_grouped = df_venc.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
+                    # Convertimos el período a String para que Plotly lo pueda graficar en el eje X
+                    df_venc_grouped['Mes_Vencimiento'] = df_venc_grouped['Mes_Vencimiento'].astype(str)
+                    
+                    # Ordenamos cronológicamente
+                    df_venc_grouped = df_venc_grouped.sort_values('Mes_Vencimiento')
+                    
+                    fig_hist_venc = px.bar(
+                        df_venc_grouped,
+                        x='Mes_Vencimiento',
+                        y='Cantidad',
+                        color='Nombre de licencia',
+                        title="Licencias a Vencer por Mes",
+                        barmode='stack',
+                        text_auto=True,
+                        color_discrete_sequence=px.colors.qualitative.Safe
+                    )
+                    
+                    fig_hist_venc.update_layout(
+                        xaxis_title="Período (Año-Mes)",
+                        yaxis_title="Cantidad de Licencias a Vencer",
+                        legend_title="Tipo de Licencia",
+                        xaxis={'type': 'category'},
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_hist_venc, use_container_width=True)
+                else:
+                    st.info("No se pudieron procesar los formatos de fecha para los vencimientos.")
+            else:
+                st.info("No hay licencias con fechas de terminación registradas para los filtros seleccionados.")
                 
-                # Creamos el gráfico de barras apiladas
-                fig_bar_lic = px.bar(
-                    df_bar_lic,
-                    x='Sucursal',
-                    y='Cantidad',
-                    color='Nombre de licencia',
-                    barmode='stack', 
-                    text_auto=True,
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                
-                fig_bar_lic.update_layout(
-                    xaxis_title="Sucursal",
-                    yaxis_title="Cantidad de Licencias",
-                    legend_title="Tipo de Licencia",
-                    hovermode="x unified"
-                )
-                st.plotly_chart(fig_bar_lic, use_container_width=True)
         else:
             st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
 
