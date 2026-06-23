@@ -175,7 +175,7 @@ if df_raw is not None:
                 except:
                     return pd.to_datetime(fecha_str, errors='coerce')
 
-            # Usamos 'Fecha de terminación' exclusivamente para el gráfico cronológico y filtros temporales
+            # Usamos 'Fecha de terminación' para la lógica temporal
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
             # 2. FILTROS PRINCIPALES (Arriba de todo)
@@ -260,7 +260,7 @@ if df_raw is not None:
             
             df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
             
-            # Declaramos el DataFrame base para la tabla detallada (por defecto hereda lo filtrado arriba)
+            # Por defecto, el dataframe acumulado hereda lo filtrado arriba
             df_acumulado_filtros = df_lic_filtrado.copy()
             
             if not df_venc.empty:
@@ -270,7 +270,7 @@ if df_raw is not None:
                 if min_date == max_date:
                     st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
                     df_venc_final = df_venc.copy()
-                    df_acumulado_filtros = df_venc.copy()  # Mismo día para la tabla
+                    df_acumulado_filtros = df_venc.copy()
                 else:
                     rango_fechas = st.slider(
                         "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
@@ -285,10 +285,11 @@ if df_raw is not None:
                         (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
                     ].copy()
                     
-                    # ⚠️ CRUCIAL: Modificamos el acumulado para la tabla respetando el rango del slider
+                    # 💡 AJUSTE CLAVE: Filtramos el acumulado por fecha pero CONSERVANDO los registros sin fecha ("---")
                     df_acumulado_filtros = df_lic_filtrado[
-                        (df_lic_filtrado['Fecha_Real'].dt.date >= rango_fechas[0]) & 
-                        (df_lic_filtrado['Fecha_Real'].dt.date <= rango_fechas[1])
+                        ((df_lic_filtrado['Fecha_Real'].dt.date >= rango_fechas[0]) & 
+                         (df_lic_filtrado['Fecha_Real'].dt.date <= rango_fechas[1])) |
+                        (df_lic_filtrado['Fecha_Real'].isnull())
                     ].copy()
 
                 if not df_venc_final.empty:
@@ -322,10 +323,10 @@ if df_raw is not None:
                 
             st.divider()
 
-            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS EN CASCADA (Sincronizados con el Slider)
+            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS EN CASCADA
             st.subheader("🔍 Listado Detallado de Licencias")
             
-            # Los combos de abajo ahora se arman sobre df_acumulado_filtros (que ya tiene Sucursal, Tipo y Fechas aplicadas)
+            # Los combos se arman dinámicamente usando el acumulado (que ahora protege los "---")
             col_tbl_filtro1, col_tbl_filtro2 = st.columns(2)
             
             with col_tbl_filtro1:
@@ -336,7 +337,7 @@ if df_raw is not None:
                 lista_estados = sorted(df_acumulado_filtros['Estado'].unique())
                 estado_sel = st.selectbox("🟢 Filtrar por Estado de Licencia:", ["Todos"] + lista_estados, key="sb_lic_estado_tbl")
             
-            # Filtrar dataframe final combinando el acumulado previo con la organización y el estado seleccionados
+            # Filtro combinado final para renderizar la tabla
             df_tabla_final = df_acumulado_filtros.copy()
             if org_sel != "Todas":
                 df_tabla_final = df_tabla_final[df_tabla_final['Nombre del cliente'] == org_sel]
@@ -357,7 +358,6 @@ if df_raw is not None:
                     'Sucursal': 'Sucursal'
                 }
                 
-                # Extraemos y renombramos basándonos puramente en las columnas reales del archivo
                 df_display = df_tabla_final[list(columnas_mapeo.keys())].copy()
                 df_display = df_display.rename(columns=columnas_mapeo)
                 
