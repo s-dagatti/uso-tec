@@ -180,7 +180,7 @@ if df_raw is not None:
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
             # 2. FILTROS PRINCIPALES (Arriba de todo, afectan a ambas sub-pestañas)
-            col_filtros1, col_filtros2 = st.columns(2)
+            col_filtros1, col_filtros2, col_filtros3 = st.columns(3)
             
             with col_filtros1:
                 lista_sucursales = sorted(df_lic_raw['Sucursal'].unique())
@@ -189,19 +189,24 @@ if df_raw is not None:
             with col_filtros2:
                 lista_licencias = sorted(df_lic_raw['Nombre de licencia'].unique())
                 licencia_sel = st.selectbox("🪪 Filtrar por Tipo de Licencia:", ["Todas"] + lista_licencias, key="sb_lic_tipo")
+                
+            with col_filtros3:
+                buscar_nro_lic = st.text_input("🔍 Buscar por Nro de Licencia:", value="", key="ti_lic_numero").strip()
             
-            # Aplicamos cascada de filtros generales
+            # Aplicamos la cascada de filtros generales (incluyendo el buscador por número)
             df_lic_filtrado = df_lic_raw.copy()
             if sucursal_sel != "Todas":
                 df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Sucursal'] == sucursal_sel]
             if licencia_sel != "Todas":
                 df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Nombre de licencia'] == licencia_sel]
+            if buscar_nro_lic != "":
+                df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Número de licencia'].str.contains(buscar_nro_lic, case=False, na=False)]
             
             # --- CREACIÓN DE SUB-PESTAÑAS ---
             sub_tab1, sub_tab2 = st.tabs(["📋 Panel Principal", "📊 Análisis por Uso"])
             
             # =========================================================
-            # SUB-PESTAÑA 1: PANEL PRINCIPAL (Tu lógica anterior)
+            # SUB-PESTAÑA 1: PANEL PRINCIPAL
             # =========================================================
             with sub_tab1:
                 # Conteo de estados sobre los datos filtrados
@@ -355,7 +360,7 @@ if df_raw is not None:
                     st.info("No hay registros para mostrar con los criterios seleccionados.")
 
             # =========================================================
-            # SUB-PESTAÑA 2: ANÁLISIS POR USO (Nueva sección solicitada)
+            # SUB-PESTAÑA 2: ANÁLISIS POR USO
             # =========================================================
             with sub_tab2:
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
@@ -364,48 +369,48 @@ if df_raw is not None:
                 vigentes o tramitadas que **no registran horas ni conexión activa** en los monitores.
                 """)
                 
-                if df_raw is not None: # df_raw es el dataframe cargado de 'Hoja 1.csv'
-                    # Aseguramos limpieza y parseo de fechas en la Hoja 1
+                if df_raw is not None: 
                     df_uso = df_raw.copy()
                     df_uso.columns = [c.strip() for c in df_uso.columns]
                     df_uso['Fecha de terminación'] = pd.to_datetime(df_uso['Fecha de terminación'], errors='coerce')
                     
-                    # Buscamos la última fecha de actualización real
                     ultima_fecha_uso = df_uso['Fecha de terminación'].max()
                     
                     if not pd.isna(ultima_fecha_uso):
-                        # Filtramos Hoja 1 por la última actualización
                         df_uso_reciente = df_uso[df_uso['Fecha de terminación'] == ultima_fecha_uso]
-                        
-                        # Extraemos los números de licencias con uso registrado (Limpios y en string)
                         licencias_con_uso = df_uso_reciente['Nro Licencia'].dropna().astype(str).str.strip().unique()
                         
-                        # Realizamos el cruce: Licencias del maestro (df_lic_filtrado) que NO están en Hoja 1
-                        # Evitamos duplicados por 'Número de licencia' para mostrar un listado limpio
                         df_sin_uso = df_lic_filtrado[~df_lic_filtrado['Número de licencia'].isin(licencias_con_uso)].copy()
                         df_sin_uso = df_sin_uso.drop_duplicates(subset=['Número de licencia'])
                         
                         if not df_sin_uso.empty:
-                            # Mapeamos y preparamos las columnas requeridas: numero de licencia, nombre de licencia, fecha de terminación, n° de serie, sucursal
+                            # 💡 AJUSTE SOLICITADO: Mapeamos agregando el 'Nombre del cliente' como Organización
                             columnas_mapeo_uso = {
                                 'Número de licencia': 'Número de licencia',
+                                'Nombre del cliente': 'Organización', # <-- Nueva columna agregada
                                 'Nombre de licencia': 'Nombre de licencia',
                                 'Fecha de terminación': 'Fecha de terminación',
                                 'N.° de serie': 'N° de serie del Monitor',
                                 'Sucursal': 'Sucursal'
                             }
                             
-                            # Validamos que existan las columnas en el dataframe para evitar KeyErrors accidentales
                             cols_validas = [c for c in columnas_mapeo_uso.keys() if c in df_sin_uso.columns]
                             df_display_uso = df_sin_uso[cols_validas].copy()
                             df_display_uso = df_display_uso.rename(columns=columnas_mapeo_uso)
                             
-                            # Cantidad total detectada en formato Alerta/Métrica
+                            # Reordenamos explícitamente para dejar la Organización en la segunda columna
+                            orden_columnas_uso = [
+                                'Número de licencia', 'Organización', 'Nombre de licencia', 
+                                'Fecha de terminación', 'N° de serie del Monitor', 'Sucursal'
+                            ]
+                            # Filtramos por las columnas que realmente se renombraron con éxito
+                            orden_final_uso = [c for c in orden_columnas_uso if c in df_display_uso.columns]
+                            df_display_uso = df_display_uso[orden_final_uso]
+                            
                             st.error(f"🚨 Se detectaron {len(df_display_uso)} licencias sin reportar actividad en la última actualización del {ultima_fecha_uso.strftime('%d/%m/%Y')}.")
                             
-                            # Desplegar la tabla filtrada
                             st.dataframe(df_display_uso, use_container_width=True, hide_index=True)
-                            st.caption("Filtros de Sucursal y Tipo de Licencia aplicados en la parte superior de la pantalla.")
+                            st.caption("Filtros generales (Sucursal, Tipo y Buscador por número) aplicados en la parte superior de la pantalla.")
                         else:
                             st.success("🎉 ¡Excelente! Todas las licencias que coinciden con los filtros aplicados registran uso en la última actualización.")
                     else:
