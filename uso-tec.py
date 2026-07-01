@@ -431,10 +431,10 @@ if df_raw is not None:
                 # --- 2. ESTADÍSTICAS CONSOLIDADAS (APLICANDO FILTROS SUPERIORES Y SIDEBAR) ---
                 st.subheader("📈 Estadísticas Consolidadas de Uso General")
                 
-                if df_raw is not None:
-                    # NOTA: Usamos como base el dataframe que ya viene filtrado por el Sidebar en tu script principal
-                    # Si tu variable filtrada por el sidebar tiene otro nombre (ej. df_filtrado), podés adaptarla acá:
-                    df_base_uso = df_raw.copy() 
+                # CORRECCIÓN: Usamos df_full porque es el DataFrame que ya sufrió todos los filtros del sidebar
+                if df_full is not None and not df_full.empty:
+                    
+                    df_base_uso = df_full.copy() # <-- Cambiado de df_raw/df_filtrado a df_full
                     
                     df_base_uso.columns = [c.strip() for c in df_base_uso.columns]
                     df_base_uso['Fecha de terminación'] = pd.to_datetime(df_base_uso['Fecha de terminación'], errors='coerce')
