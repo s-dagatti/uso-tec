@@ -157,6 +157,7 @@ if df_raw is not None:
             df_lic_raw['Nombre de licencia'] = df_lic_raw['Nombre de licencia'].fillna("Sin Nombre").astype(str).str.strip()
             df_lic_raw['Nombre del cliente'] = df_lic_raw['Nombre del cliente'].fillna("Sin Organización").astype(str).str.strip()
             df_lic_raw['Estado'] = df_lic_raw['Estado'].fillna("Sin Estado").astype(str).str.strip()
+            df_lic_raw['Número de licencia'] = df_lic_raw['Número de licencia'].fillna("").astype(str).str.strip()
             
             # --- PARSEO SEGURO DE FECHAS PARA EL GRÁFICO HISTÓRICO Y TABLA ---
             meses_es = {'ene': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'may': 'May', 'jun': 'Jun',
@@ -178,7 +179,7 @@ if df_raw is not None:
             # Usamos 'Fecha de terminación' para la lógica temporal
             df_lic_raw['Fecha_Real'] = df_lic_raw['Fecha de terminación'].apply(parsear_fecha_es)
             
-            # 2. FILTROS PRINCIPALES (Arriba de todo)
+            # 2. FILTROS PRINCIPALES (Arriba de todo, afectan a ambas sub-pestañas)
             col_filtros1, col_filtros2 = st.columns(2)
             
             with col_filtros1:
@@ -189,191 +190,229 @@ if df_raw is not None:
                 lista_licencias = sorted(df_lic_raw['Nombre de licencia'].unique())
                 licencia_sel = st.selectbox("🪪 Filtrar por Tipo de Licencia:", ["Todas"] + lista_licencias, key="sb_lic_tipo")
             
-            # Aplicamos cascada de filtros generales para KPIs y primeros gráficos
+            # Aplicamos cascada de filtros generales
             df_lic_filtrado = df_lic_raw.copy()
             if sucursal_sel != "Todas":
                 df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Sucursal'] == sucursal_sel]
             if licencia_sel != "Todas":
                 df_lic_filtrado = df_lic_filtrado[df_lic_filtrado['Nombre de licencia'] == licencia_sel]
             
-            # 3. Conteo de estados sobre los datos filtrados
-            activas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'Activo'])
-            no_activadas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'No activado'])
+            # --- CREACIÓN DE SUB-PESTAÑAS ---
+            sub_tab1, sub_tab2 = st.tabs(["📋 Panel Principal", "📊 Análisis por Uso"])
             
-            # Columnas de KPI
-            kpi1, kpi2, kpi3 = st.columns(3)
-            kpi1.metric("Licencias Activas", activas)
-            kpi2.metric("Licencias No Activadas", no_activadas)
-            kpi3.metric("Total Licencias", len(df_lic_filtrado))
-            
-            st.divider()
-            
-            # 4. GRÁFICOS EN PARALELO (Torta y Barras por sucursal)
-            col_graf1, col_graf2 = st.columns(2)
-            
-            with col_graf1:
-                st.subheader("📊 Distribución por Tipo de Licencia")
-                if not df_lic_filtrado.empty:
-                    df_pie_lic = df_lic_filtrado.groupby('Nombre de licencia').size().reset_index(name='Cantidad')
-                    fig_pie_lic = px.pie(
-                        df_pie_lic, 
-                        names='Nombre de licencia', 
-                        values='Cantidad',
-                        hole=0.4,
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    fig_pie_lic.update_traces(
-                        textinfo='percent+label',
-                        hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>"
-                    )
-                    st.plotly_chart(fig_pie_lic, use_container_width=True)
-                else:
-                    st.info("No hay datos para mostrar con los filtros seleccionados.")
+            # =========================================================
+            # SUB-PESTAÑA 1: PANEL PRINCIPAL (Tu lógica anterior)
+            # =========================================================
+            with sub_tab1:
+                # Conteo de estados sobre los datos filtrados
+                activas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'Activo'])
+                no_activadas = len(df_lic_filtrado[df_lic_filtrado['Estado'] == 'No activado'])
                 
-            with col_graf2:
-                st.subheader("🏢 Distribución por Sucursal")
-                if not df_lic_filtrado.empty:
-                    df_bar_lic = df_lic_filtrado.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
-                    fig_bar_lic = px.bar(
-                        df_bar_lic,
-                        x='Sucursal',
-                        y='Cantidad',
-                        color='Nombre de licencia',
-                        barmode='stack', 
-                        text_auto=True,
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    fig_bar_lic.update_layout(
-                        xaxis_title="Sucursal",
-                        yaxis_title="Cantidad de Licencias",
-                        legend_title="Tipo de Licencia",
-                        hovermode="x unified"
-                    )
-                    st.plotly_chart(fig_bar_lic, use_container_width=True)
-                else:
-                    st.info("No hay datos para mostrar.")
-
-            st.divider()
-
-            # 5. GRÁFICO HISTÓRICO DE VENCIMIENTOS CON FILTRO DESPLAZABLE DE FECHAS
-            st.subheader("📅 Cronograma Histórico de Vencimientos")
-            
-            df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
-            
-            # Por defecto, el dataframe acumulado hereda lo filtrado arriba
-            df_acumulado_filtros = df_lic_filtrado.copy()
-            
-            if not df_venc.empty:
-                min_date = df_venc['Fecha_Real'].min().date()
-                max_date = df_venc['Fecha_Real'].max().date()
+                # Columnas de KPI
+                kpi1, kpi2, kpi3 = st.columns(3)
+                kpi1.metric("Licencias Activas", activas)
+                kpi2.metric("Licencias No Activadas", no_activadas)
+                kpi3.metric("Total Licencias", len(df_lic_filtrado))
                 
-                if min_date == max_date:
-                    st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
-                    df_venc_final = df_venc.copy()
-                    df_acumulado_filtros = df_venc.copy()
-                else:
-                    rango_fechas = st.slider(
-                        "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
-                        min_value=min_date,
-                        max_value=max_date,
-                        value=(min_date, max_date),
-                        format="DD/MM/YYYY"
-                    )
+                st.divider()
+                
+                # GRÁFICOS EN PARALELO
+                col_graf1, col_graf2 = st.columns(2)
+                
+                with col_graf1:
+                    st.subheader("📊 Distribución por Tipo de Licencia")
+                    if not df_lic_filtrado.empty:
+                        df_pie_lic = df_lic_filtrado.groupby('Nombre de licencia').size().reset_index(name='Cantidad')
+                        fig_pie_lic = px.pie(
+                            df_pie_lic, 
+                            names='Nombre de licencia', 
+                            values='Cantidad',
+                            hole=0.4,
+                            color_discrete_sequence=px.colors.qualitative.Pastel
+                        )
+                        fig_pie_lic.update_traces(
+                            textinfo='percent+label',
+                            hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>"
+                        )
+                        st.plotly_chart(fig_pie_lic, use_container_width=True)
+                    else:
+                        st.info("No hay datos para mostrar con los filtros seleccionados.")
                     
-                    df_venc_final = df_venc[
-                        (df_venc['Fecha_Real'].dt.date >= rango_fechas[0]) & 
-                        (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
-                    ].copy()
-                    
-                    # 💡 AJUSTE CLAVE: Filtramos el acumulado por fecha pero CONSERVANDO los registros sin fecha ("---")
-                    df_acumulado_filtros = df_lic_filtrado[
-                        ((df_lic_filtrado['Fecha_Real'].dt.date >= rango_fechas[0]) & 
-                         (df_lic_filtrado['Fecha_Real'].dt.date <= rango_fechas[1])) |
-                        (df_lic_filtrado['Fecha_Real'].isnull())
-                    ].copy()
+                with col_graf2:
+                    st.subheader("🏢 Distribución por Sucursal")
+                    if not df_lic_filtrado.empty:
+                        df_bar_lic = df_lic_filtrado.groupby(['Sucursal', 'Nombre de licencia']).size().reset_index(name='Cantidad')
+                        fig_bar_lic = px.bar(
+                            df_bar_lic,
+                            x='Sucursal',
+                            y='Cantidad',
+                            color='Nombre de licencia',
+                            barmode='stack', 
+                            text_auto=True,
+                            color_discrete_sequence=px.colors.qualitative.Pastel
+                        )
+                        fig_bar_lic.update_layout(
+                            xaxis_title="Sucursal",
+                            yaxis_title="Cantidad de Licencias",
+                            legend_title="Tipo de Licencia",
+                            hovermode="x unified"
+                        )
+                        st.plotly_chart(fig_bar_lic, use_container_width=True)
+                    else:
+                        st.info("No hay datos para mostrar.")
 
-                if not df_venc_final.empty:
-                    df_venc_final['Mes_Vencimiento'] = df_venc_final['Fecha_Real'].dt.to_period('M')
-                    df_venc_grouped = df_venc_final.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
-                    df_venc_grouped['Mes_Vencimiento'] = df_venc_grouped['Mes_Vencimiento'].astype(str)
-                    df_venc_grouped = df_venc_grouped.sort_values('Mes_Vencimiento')
+                st.divider()
+
+                # GRÁFICO HISTÓRICO DE VENCIMIENTOS
+                st.subheader("📅 Cronograma Histórico de Vencimientos")
+                df_venc = df_lic_filtrado[df_lic_filtrado['Fecha_Real'].notnull()].copy()
+                df_acumulado_filtros = df_lic_filtrado.copy()
+                
+                if not df_venc.empty:
+                    min_date = df_venc['Fecha_Real'].min().date()
+                    max_date = df_venc['Fecha_Real'].max().date()
                     
-                    fig_hist_venc = px.bar(
-                        df_venc_grouped,
-                        x='Mes_Vencimiento',
-                        y='Cantidad',
-                        color='Nombre de licencia',
-                        barmode='stack',
-                        text_auto=True,
-                        color_discrete_sequence=px.colors.qualitative.Safe
-                    )
+                    if min_date == max_date:
+                        st.info(f"Todas las licencias seleccionadas vencen el mismo día: {min_date}")
+                        df_venc_final = df_venc.copy()
+                        df_acumulado_filtros = df_venc.copy()
+                    else:
+                        rango_fechas = st.slider(
+                            "📆 Seleccionar rango de fechas de vencimiento a visualizar:",
+                            min_value=min_date,
+                            max_value=max_date,
+                            value=(min_date, max_date),
+                            format="DD/MM/YYYY"
+                        )
+                        
+                        df_venc_final = df_venc[
+                            (df_venc['Fecha_Real'].dt.date >= rango_fechas[0]) & 
+                            (df_venc['Fecha_Real'].dt.date <= rango_fechas[1])
+                        ].copy()
+                        
+                        df_acumulado_filtros = df_lic_filtrado[
+                            ((df_lic_filtrado['Fecha_Real'].dt.date >= rango_fechas[0]) & 
+                             (df_lic_filtrado['Fecha_Real'].dt.date <= rango_fechas[1])) |
+                            (df_lic_filtrado['Fecha_Real'].isnull())
+                        ].copy()
+
+                    if not df_venc_final.empty:
+                        df_venc_final['Mes_Vencimiento'] = df_venc_final['Fecha_Real'].dt.to_period('M')
+                        df_venc_grouped = df_venc_final.groupby(['Mes_Vencimiento', 'Nombre de licencia']).size().reset_index(name='Cantidad')
+                        df_venc_grouped['Mes_Vencimiento'] = df_venc_grouped['Mes_Vencimiento'].astype(str)
+                        df_venc_grouped = df_venc_grouped.sort_values('Mes_Vencimiento')
+                        
+                        fig_hist_venc = px.bar(
+                            df_venc_grouped,
+                            x='Mes_Vencimiento',
+                            y='Cantidad',
+                            color='Nombre de licencia',
+                            barmode='stack',
+                            text_auto=True,
+                            color_discrete_sequence=px.colors.qualitative.Safe
+                        )
+                        fig_hist_venc.update_layout(
+                            xaxis_title="Período (Año-Mes)", yaxis_title="Cantidad de Licencias a Vencer",
+                            legend_title="Tipo de Licencia", xaxis={'type': 'category'}, hovermode="x unified"
+                        )
+                        st.plotly_chart(fig_hist_venc, use_container_width=True)
+                
+                st.divider()
+
+                # SECCIÓN DE TABLA DETALLADA
+                st.subheader("🔍 Listado Detallado de Licencias")
+                col_tbl_filtro1, col_tbl_filtro2 = st.columns(2)
+                
+                with col_tbl_filtro1:
+                    lista_orgs = sorted(df_acumulado_filtros['Nombre del cliente'].unique())
+                    org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
                     
-                    fig_hist_venc.update_layout(
-                        xaxis_title="Período (Año-Mes)",
-                        yaxis_title="Cantidad de Licencias a Vencer",
-                        legend_title="Tipo de Licencia",
-                        xaxis={'type': 'category'},
-                        hovermode="x unified"
-                    )
-                    st.plotly_chart(fig_hist_venc, use_container_width=True)
+                with col_tbl_filtro2:
+                    lista_estados = sorted(df_acumulado_filtros['Estado'].unique())
+                    estado_sel = st.selectbox("🟢 Filtrar por Estado de Licencia:", ["Todos"] + lista_estados, key="sb_lic_estado_tbl")
+                
+                df_tabla_final = df_acumulado_filtros.copy()
+                if org_sel != "Todas":
+                    df_tabla_final = df_tabla_final[df_tabla_final['Nombre del cliente'] == org_sel]
+                if estado_sel != "Todos":
+                    df_tabla_final = df_tabla_final[df_tabla_final['Estado'] == estado_sel]
+                
+                if not df_tabla_final.empty:
+                    columnas_mapeo = {
+                        'Número de licencia': 'numero de licencia', 'Nombre del cliente': 'organización',
+                        'Modelo': 'Modelo de maquina', 'Nombre de licencia': 'Nombre de licencia',
+                        'Estado': 'Estado', 'Fecha de inicio': 'Fecha de inicio',
+                        'Fecha de terminación': 'Fecha de terminacion', 'Fecha de vencimiento de pedido': 'Fecha de vencimiento',
+                        'Sucursal': 'Sucursal'
+                    }
+                    df_display = df_tabla_final[list(columnas_mapeo.keys())].copy()
+                    df_display = df_display.rename(columns=columnas_mapeo)
+                    orden_columnas = ['numero de licencia', 'organización', 'Modelo de maquina', 'Nombre de licencia',
+                                      'Estado', 'Fecha de inicio', 'Fecha de terminacion', 'Fecha de vencimiento', 'Sucursal']
+                    st.dataframe(df_display[orden_columnas], use_container_width=True, hide_index=True)
+                    st.caption(f"Mostrando {len(df_display)} registros encontrados.")
                 else:
-                    st.info("No hay licencias que venzan dentro del rango de fechas seleccionado.")
-            else:
-                st.info("No hay licencias con fechas de vencimiento válidas para los filtros aplicados.")
-                
-            st.divider()
+                    st.info("No hay registros para mostrar con los criterios seleccionados.")
 
-            # 6. SECCIÓN DE TABLA DETALLADA CON FILTROS EN CASCADA
-            st.subheader("🔍 Listado Detallado de Licencias")
-            
-            # Los combos se arman dinámicamente usando el acumulado (que ahora protege los "---")
-            col_tbl_filtro1, col_tbl_filtro2 = st.columns(2)
-            
-            with col_tbl_filtro1:
-                lista_orgs = sorted(df_acumulado_filtros['Nombre del cliente'].unique())
-                org_sel = st.selectbox("🚜 Filtrar por Organización / Cliente:", ["Todas"] + lista_orgs, key="sb_lic_org")
+            # =========================================================
+            # SUB-PESTAÑA 2: ANÁLISIS POR USO (Nueva sección solicitada)
+            # =========================================================
+            with sub_tab2:
+                st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
+                st.markdown("""
+                Este análisis compara el maestro de **Licencias** contra los reportes de actividad de la **Hoja 1** (restringido a la última fecha de actualización disponible). Las filas listadas abajo corresponden a licencias 
+                vigentes o tramitadas que **no registran horas ni conexión activa** en los monitores.
+                """)
                 
-            with col_tbl_filtro2:
-                lista_estados = sorted(df_acumulado_filtros['Estado'].unique())
-                estado_sel = st.selectbox("🟢 Filtrar por Estado de Licencia:", ["Todos"] + lista_estados, key="sb_lic_estado_tbl")
-            
-            # Filtro combinado final para renderizar la tabla
-            df_tabla_final = df_acumulado_filtros.copy()
-            if org_sel != "Todas":
-                df_tabla_final = df_tabla_final[df_tabla_final['Nombre del cliente'] == org_sel]
-            if estado_sel != "Todos":
-                df_tabla_final = df_tabla_final[df_tabla_final['Estado'] == estado_sel]
-            
-            if not df_tabla_final.empty:
-                # Mapeo estricto e independiente de las columnas reales de tu CSV
-                columnas_mapeo = {
-                    'Número de licencia': 'numero de licencia',
-                    'Nombre del cliente': 'organización',
-                    'Modelo': 'Modelo de maquina',
-                    'Nombre de licencia': 'Nombre de licencia',
-                    'Estado': 'Estado',
-                    'Fecha de inicio': 'Fecha de inicio',
-                    'Fecha de terminación': 'Fecha de terminacion',
-                    'Fecha de vencimiento de pedido': 'Fecha de vencimiento',
-                    'Sucursal': 'Sucursal'
-                }
-                
-                df_display = df_tabla_final[list(columnas_mapeo.keys())].copy()
-                df_display = df_display.rename(columns=columnas_mapeo)
-                
-                # Reordenamos las columnas exactamente según tu lista limpia
-                orden_columnas = [
-                    'numero de licencia', 'organización', 'Modelo de maquina', 'Nombre de licencia',
-                    'Estado', 'Fecha de inicio', 'Fecha de terminacion', 'Fecha de vencimiento', 'Sucursal'
-                ]
-                df_display = df_display[orden_columnas]
-                
-                # Desplegamos el DataFrame
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-                st.caption(f"Mostrando {len(df_display)} registros encontrados.")
-            else:
-                st.info("No hay registros para mostrar con los criterios seleccionados.")
-                
+                if df_raw is not None: # df_raw es el dataframe cargado de 'Hoja 1.csv'
+                    # Aseguramos limpieza y parseo de fechas en la Hoja 1
+                    df_uso = df_raw.copy()
+                    df_uso.columns = [c.strip() for c in df_uso.columns]
+                    df_uso['Fecha de terminación'] = pd.to_datetime(df_uso['Fecha de terminación'], errors='coerce')
+                    
+                    # Buscamos la última fecha de actualización real
+                    ultima_fecha_uso = df_uso['Fecha de terminación'].max()
+                    
+                    if not pd.isna(ultima_fecha_uso):
+                        # Filtramos Hoja 1 por la última actualización
+                        df_uso_reciente = df_uso[df_uso['Fecha de terminación'] == ultima_fecha_uso]
+                        
+                        # Extraemos los números de licencias con uso registrado (Limpios y en string)
+                        licencias_con_uso = df_uso_reciente['Nro Licencia'].dropna().astype(str).str.strip().unique()
+                        
+                        # Realizamos el cruce: Licencias del maestro (df_lic_filtrado) que NO están en Hoja 1
+                        # Evitamos duplicados por 'Número de licencia' para mostrar un listado limpio
+                        df_sin_uso = df_lic_filtrado[~df_lic_filtrado['Número de licencia'].isin(licencias_con_uso)].copy()
+                        df_sin_uso = df_sin_uso.drop_duplicates(subset=['Número de licencia'])
+                        
+                        if not df_sin_uso.empty:
+                            # Mapeamos y preparamos las columnas requeridas: numero de licencia, nombre de licencia, fecha de terminación, n° de serie, sucursal
+                            columnas_mapeo_uso = {
+                                'Número de licencia': 'Número de licencia',
+                                'Nombre de licencia': 'Nombre de licencia',
+                                'Fecha de terminación': 'Fecha de terminación',
+                                'N.° de serie': 'N° de serie del Monitor',
+                                'Sucursal': 'Sucursal'
+                            }
+                            
+                            # Validamos que existan las columnas en el dataframe para evitar KeyErrors accidentales
+                            cols_validas = [c for c in columnas_mapeo_uso.keys() if c in df_sin_uso.columns]
+                            df_display_uso = df_sin_uso[cols_validas].copy()
+                            df_display_uso = df_display_uso.rename(columns=columnas_mapeo_uso)
+                            
+                            # Cantidad total detectada en formato Alerta/Métrica
+                            st.error(f"🚨 Se detectaron {len(df_display_uso)} licencias sin reportar actividad en la última actualización del {ultima_fecha_uso.strftime('%d/%m/%Y')}.")
+                            
+                            # Desplegar la tabla filtrada
+                            st.dataframe(df_display_uso, use_container_width=True, hide_index=True)
+                            st.caption("Filtros de Sucursal y Tipo de Licencia aplicados en la parte superior de la pantalla.")
+                        else:
+                            st.success("🎉 ¡Excelente! Todas las licencias que coinciden con los filtros aplicados registran uso en la última actualización.")
+                    else:
+                        st.warning("No se pudo determinar la última fecha de actualización en los datos de la Hoja 1.")
+                else:
+                    st.warning("La base de datos de telemetría (Hoja 1) no está disponible para realizar el cruce.")
+                    
         else:
             st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
 
