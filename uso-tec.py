@@ -444,17 +444,17 @@ if df_raw is not None:
                         if not df_uso_actual.empty:
                             df_uso_actual['Licencia_Detalle'] = df_uso_actual['Tipo Licencia'].astype(str) + " (" + df_uso_actual['Nro Licencia'].astype(str) + ")"
                             
-                            # --- GRÁFICO DE BARRAS REVISADO (EJE X POR TIPO) ---
+                            # --- GRÁFICO DE BARRAS REVISADO (EJE X POR TIPO Y COLOR POR TIPO DE LICENCIA) ---
                             st.markdown(f"**Distribución de Licencias por Tipo de Equipo (Actualizado al {ultima_fecha_act.strftime('%d/%m/%Y')})**")
                             
-                            # Agrupamos usando 'Tipo' en lugar de 'Máquina'
-                            df_chart_uso = df_uso_actual.groupby(['Tipo', 'Licencia_Detalle']).size().reset_index(name='Cantidad')
+                            # Agrupamos únicamente por el Tipo de Equipo y el Tipo de Licencia para limpiar los colores
+                            df_chart_uso = df_uso_actual.groupby(['Tipo', 'Tipo Licencia']).size().reset_index(name='Cantidad')
                             
                             fig_bar_uso_maquina = px.bar(
                                 df_chart_uso,
                                 x='Tipo',
                                 y='Cantidad',
-                                color='Licencia_Detalle',
+                                color='Tipo Licencia', # <-- Ahora solo distingue por el tipo, sin el nro de licencia
                                 barmode='stack',
                                 text_auto=True,
                                 color_discrete_sequence=px.colors.qualitative.Plotly
@@ -462,7 +462,7 @@ if df_raw is not None:
                             fig_bar_uso_maquina.update_layout(
                                 xaxis_title="Tipo de Equipo",
                                 yaxis_title="Cantidad de Licencias",
-                                legend_title="Detalle de Licencia (Tipo y Nro)",
+                                legend_title="Tipo de Licencia",
                                 hovermode="x unified"
                             )
                             st.plotly_chart(fig_bar_uso_maquina, use_container_width=True)
