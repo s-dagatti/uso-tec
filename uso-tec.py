@@ -360,9 +360,69 @@ if df_raw is not None:
                     st.info("No hay registros para mostrar con los criterios seleccionados.")
 
             # =========================================================
-            # SUB-PESTAÑA 2: ANÁLISIS POR USO
+            # SUB-PESTAÑA 2: ANÁLISIS POR USO Y GLOSARIO
             # =========================================================
             with sub_tab2:
+                # --- NUEVA SECCIÓN: GLOSARIO DE LICENCIAS (AISLADO) ---
+                st.subheader("📚 Glosario de Funciones por Licencia")
+                
+                with st.expander("🔍 Consultar qué incluye cada tipo de licencia", expanded=False):
+                    st.markdown("*Este selector es informativo y no altera las tablas o gráficos del panel.*")
+                    
+                    # Estructura de datos con el diccionario de licencias y funciones
+                    glosario_licencias = {
+                        "Renovable avanzada": [
+                            "AutoTrac™", "Compartir datos en campo", "Guiado pasivo de implemento AutoTrac™",
+                            "Automatización de maniobras AutoTrac™", "Machine Sync", "Razones de inactividad",
+                            "Capa de fondo de satélite", "AutoPath™"
+                        ],
+                        "Renovable escencial": [
+                            "AutoTrac™", "Compartir datos en campo", "Razones de inactividad", "Capa de fondo de satélite"
+                        ],
+                        "Control de secciones renovable": [
+                            "Control de secciones"
+                        ],
+                        "Cosechadora S7/X9 Ultimate": [
+                            "Capa de fondo de satélite", "Razones de inactividad", "Auto Unload", "Compartir datos en campo",
+                            "Automatización de maniobras AutoTrac™", "Machine Sync", "AutoPath™", 
+                            "Automatización de ajustes de cosecha", "Gestión inteligente de potencia (IPM)", 
+                            "Vistas satelitales", "Cámaras delanteras"
+                        ],
+                        "G5 Advanced - Aplicación autopropulsada": [
+                            "Capa de fondo de satélite", "Automatización de maniobras AutoTrac™", "Razones de inactividad",
+                            "Compartir datos en campo", "AutoPath™"
+                        ],
+                        "G5 Advanced - Cosechadora": [
+                            "Capa de fondo de satélite", "Razones de inactividad", "Compartir datos en campo",
+                            "Automatización de maniobras AutoTrac™", "Machine Sync", "AutoPath™"
+                        ],
+                        "G5 Advanced - Tractor de la serie 7/8/9": [
+                            "Capa de fondo de satélite", "Razones de inactividad", "Compartir datos en campo",
+                            "Guiado pasivo de implemento AutoTrac™", "Automatización de maniobras AutoTrac™", 
+                            "Machine Sync", "AutoPath™"
+                        ],
+                        "G5 Advanced - Universal": [
+                            "Capa de fondo de satélite", "Razones de inactividad", "Compartir datos en campo",
+                            "Automatización de maniobras AutoTrac™", "Machine Sync", "AutoPath™", 
+                            "Guiado pasivo de implemento AutoTrac™"
+                        ]
+                    }
+                    
+                    # Selector exclusivo e interno para el expander
+                    licencia_glosario_sel = st.selectbox(
+                        "Seleccioná una licencia para ver sus características:",
+                        options=list(glosario_licencias.keys()),
+                        key="sb_glosario_interno"
+                    )
+                    
+                    # Despliegue de las funciones de la licencia seleccionada
+                    st.markdown(f"### Funciones incluidas en **{licencia_glosario_sel}**:")
+                    for funcion in glosario_licencias[licencia_glosario_sel]:
+                        st.markdown(f"• {funcion}")
+                
+                st.divider()
+                
+                # --- SECCIÓN ORIGINAL DE ANÁLISIS DE TELEMETRÍA ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
                 st.markdown("""
                 Este análisis compara el maestro de **Licencias** contra los reportes de actividad de la **Hoja 1** (restringido a la última fecha de actualización disponible). Las filas listadas abajo corresponden a licencias 
@@ -384,10 +444,9 @@ if df_raw is not None:
                         df_sin_uso = df_sin_uso.drop_duplicates(subset=['Número de licencia'])
                         
                         if not df_sin_uso.empty:
-                            # 💡 AJUSTE SOLICITADO: Mapeamos agregando el 'Nombre del cliente' como Organización
                             columnas_mapeo_uso = {
                                 'Número de licencia': 'Número de licencia',
-                                'Nombre del cliente': 'Organización', # <-- Nueva columna agregada
+                                'Nombre del cliente': 'Organización',
                                 'Nombre de licencia': 'Nombre de licencia',
                                 'Fecha de terminación': 'Fecha de terminación',
                                 'N.° de serie': 'N° de serie del Monitor',
@@ -398,12 +457,10 @@ if df_raw is not None:
                             df_display_uso = df_sin_uso[cols_validas].copy()
                             df_display_uso = df_display_uso.rename(columns=columnas_mapeo_uso)
                             
-                            # Reordenamos explícitamente para dejar la Organización en la segunda columna
                             orden_columnas_uso = [
                                 'Número de licencia', 'Organización', 'Nombre de licencia', 
                                 'Fecha de terminación', 'N° de serie del Monitor', 'Sucursal'
                             ]
-                            # Filtramos por las columnas que realmente se renombraron con éxito
                             orden_final_uso = [c for c in orden_columnas_uso if c in df_display_uso.columns]
                             df_display_uso = df_display_uso[orden_final_uso]
                             
@@ -417,9 +474,6 @@ if df_raw is not None:
                         st.warning("No se pudo determinar la última fecha de actualización en los datos de la Hoja 1.")
                 else:
                     st.warning("La base de datos de telemetría (Hoja 1) no está disponible para realizar el cruce.")
-                    
-        else:
-            st.warning("No se pudieron cargar los datos de licencias desde el repositorio.")
 
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
