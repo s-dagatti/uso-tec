@@ -363,13 +363,12 @@ if df_raw is not None:
             # SUB-PESTAÑA 2: ANÁLISIS POR USO Y GLOSARIO
             # =========================================================
             with sub_tab2:
-                # --- NUEVA SECCIÓN: GLOSARIO DE LICENCIAS (AISLADO) ---
+                # --- GLOSARIO DE LICENCIAS (AISLADO) ---
                 st.subheader("📚 Glosario de Funciones por Licencia")
                 
                 with st.expander("🔍 Consultar qué incluye cada tipo de licencia", expanded=False):
                     st.markdown("*Este selector es informativo y no altera las tablas o gráficos del panel.*")
                     
-                    # Estructura de datos con el diccionario de licencias y funciones
                     glosario_licencias = {
                         "Renovable avanzada": [
                             "AutoTrac™", "Compartir datos en campo", "Guiado pasivo de implemento AutoTrac™",
@@ -408,28 +407,134 @@ if df_raw is not None:
                         ]
                     }
                     
-                    # Selector exclusivo e interno para el expander
                     licencia_glosario_sel = st.selectbox(
                         "Seleccioná una licencia para ver sus características:",
                         options=list(glosario_licencias.keys()),
                         key="sb_glosario_interno"
                     )
                     
-                    # Despliegue de las funciones de la licencia seleccionada
                     st.markdown(f"### Funciones incluidas en **{licencia_glosario_sel}**:")
                     for funcion in glosario_licencias[licencia_glosario_sel]:
                         st.markdown(f"• {funcion}")
                 
                 st.divider()
                 
-                # --- SECCIÓN ORIGINAL DE ANÁLISIS DE TELEMETRÍA ---
+                # --- NUEVA SECCIÓN: ESTADÍSTICAS DE USO EN CAMPO (ÚLTIMA ACTUALIZACIÓN) ---
+                st.subheader("📈 Estadísticas de Licencias en Uso Activo")
+                
+                if df_raw is not None:
+                    # Preparación de la Hoja 1 filtrada por filtros superiores y última fecha
+                    df_uso_analisis = df_raw.copy()
+                    df_uso_analisis.columns = [c.strip() for c in df_uso_analisis.columns]
+                    df_uso_analisis['Fecha de terminación'] = pd.to_datetime(df_uso_analisis['Fecha de terminación'], errors='coerce')
+                    
+                    ultima_fecha_act = df_uso_analisis['Fecha de terminación'].max()
+                    
+                    if not pd.isna(ultima_fecha_act):
+                        # 1. Filtramos por la última actualización disponible en monitores
+                        df_uso_actual = df_uso_analisis[df_uso_analisis['Fecha de terminación'] == ultima_fecha_act].copy()
+                        
+                        # Filtramos solo registros que tengan un número de licencia válido asignado
+                        df_uso_actual = df_uso_actual[df_uso_actual['Nro Licencia'].notnull() & (df_uso_actual['Nro Licencia'].astype(str).str.strip() != "") & (df_uso_actual['Nro Licencia'].astype(str).str.strip() != "#N/A")]
+                        
+                        # Aplicamos cascada de filtros superiores para coherencia visual en el tablero
+                        if sucursal_sel != "Todas":
+                            df_uso_actual = df_uso_actual[df_uso_actual['Sucursal'] == sucursal_sel]
+                        if licencia_sel != "Todas":
+                            df_uso_actual = df_uso_actual[df_uso_actual['Tipo Licencia'] == licencia_sel]
+                        if buscar_nro_lic != "":
+                            df_uso_actual = df_uso_actual[df_uso_actual['Nro Licencia'].astype(str).str.contains(buscar_nro_lic, case=False, na=False)]
+                        
+                        if not df_uso_actual.empty:
+                            # Creación de una columna combinada para el desglose de colores pedido (Tipo + Nro)
+                            df_uso_actual['Licencia_Detalle'] = df_uso_actual['Tipo Licencia'].astype(str) + " (" + df_uso_actual['Nro Licencia'].astype(str) + ")"
+                            
+                            # --- GRÁFICO DE BARRAS SOLICITADO ---
+                            st.markdown(f"**Distribución de Licencias por Máquina (Actualizado al {ultima_fecha_act.strftime('%d/%m/%Y')})**")
+                            
+                            # Agrupamos por máquina y el detalle de licencia
+                            df_chart_uso = df_uso_actual.groupby(['Máquina', 'Licencia_Detalle']).size().reset_index(name='Cantidad')
+                            
+                            fig_bar_uso_maquina = px.bar(
+                                df_chart_uso,
+                                x='Máquina',
+                                y='Cantidad',
+                                color='Licencia_Detalle',
+                                barmode='stack',
+                                text_auto=True,
+                                color_discrete_sequence=px.colors.qualitative.Plotly
+                            )
+                            fig_bar_uso_maquina.update_layout(
+                                xaxis_title="Máquina / Equipo",
+                                yaxis_title="Cantidad de Licencias",
+                                legend_title="Detalle de Licencia (Tipo y Nro)",
+                                hovermode="x unified"
+                            )
+                            st.plotly_chart(fig_bar_uso_maquina, use_container_width=True)
+                            
+                            st.markdown("---")
+                            
+                            # --- TABLA DE DETALLE DE ADOPCIÓN (TIERS) ---
+                            st.markdown("#### 📋 Detalle de Adopción Tecnológica y Uso de Licencia")
+                            
+                            # Parseo y cálculo seguro de los Tiers de uso (%)
+                            for col in df_uso_actual.columns:
+                                if '%' in col or 'Activo' in col:
+                                    df_uso_actual[col] = pd.to_numeric(df_uso_actual[col], errors='coerce').fillna(0)
+                            
+                            # Lógica Tier 1 (Guiados Esenciales)
+                            cols_t1 = [c for c in ['AutoTrac™ Activo (%)', 'AutoPath™ Activo (%)'] if c in df_uso_actual.columns]
+                            if cols_t1:
+                                df_uso_actual['Tier 1 (%)'] = df_uso_actual[cols_t1].mean(axis=1)
+                            else:
+                                df_uso_actual['Tier 1 (%)'] = 0.0
+                                
+                            # Lógica Tier 2 (Automatizaciones Avanzadas)
+                            cols_t2 = [c for c in ['Automatización de maniobras AutoTrac™ Activo (%)', 'Guiado pasivo de implemento AutoTrac™ Activo (%)', 'John Deere Machine Sync Vehículo guía activo (%)'] if c in df_uso_actual.columns]
+                            if cols_t2:
+                                df_uso_actual['Tier 2 (%)'] = df_uso_actual[cols_t2].mean(axis=1)
+                            else:
+                                df_uso_actual['Tier 2 (%)'] = 0.0
+                            
+                            # Estructuramos la tabla pedida: Organización, Máquina, Nro Serie Monitor, Nro Licencia, Uso Tier 1, Uso Tier 2
+                            columnas_tabla_uso = {
+                                'Organización': 'Organización',
+                                'Máquina': 'Máquina',
+                                'Nro Serie Monior': 'N° Serie Monitor',
+                                'Nro Licencia': 'Número de Licencia',
+                                'Tier 1 (%)': 'Uso Tier 1 (%)',
+                                'Tier 2 (%)': 'Uso Tier 2 (%)'
+                            }
+                            
+                            cols_tabla_validas = [c for c in columnas_tabla_uso.keys() if c in df_uso_actual.columns]
+                            df_tabla_tiers = df_uso_actual[cols_tabla_validas].copy()
+                            df_tabla_tiers = df_tabla_tiers.rename(columns=columnas_tabla_uso)
+                            
+                            # Formateamos los porcentajes para que la tabla quede prolija y legible (ej: 45.2%)
+                            if 'Uso Tier 1 (%)' in df_tabla_tiers.columns:
+                                df_tabla_tiers['Uso Tier 1 (%)'] = df_tabla_tiers['Uso Tier 1 (%)'].map('{:.1f}%'.format)
+                            if 'Uso Tier 2 (%)' in df_tabla_tiers.columns:
+                                df_tabla_tiers['Uso Tier 2 (%)'] = df_tabla_tiers['Uso Tier 2 (%)'].map('{:.1f}%'.format)
+                                
+                            st.dataframe(df_tabla_tiers, use_container_width=True, hide_index=True)
+                            st.caption(f"Mostrando {len(df_tabla_tiers)} registros con licencias activas en el campo.")
+                        else:
+                            st.info("No hay licencias activas reportando datos en la Hoja 1 bajo los filtros seleccionados.")
+                    else:
+                        st.warning("No se pudo detectar la fecha de actualización de telemetría en la Hoja 1.")
+                else:
+                    st.warning("La base de datos de Hoja 1 no se encuentra disponible.")
+                
+                st.divider()
+                
+                # --- SECCIÓN ORIGINAL: LICENCIAS SIN REGISTRO DE USO ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
                 st.markdown("""
                 Este análisis compara el maestro de **Licencias** contra los reportes de actividad de la **Hoja 1** (restringido a la última fecha de actualización disponible). Las filas listadas abajo corresponden a licencias 
                 vigentes o tramitadas que **no registran horas ni conexión activa** en los monitores.
                 """)
                 
-                if df_raw is not None: 
+                if df_raw is not None and df_lic_filtrado is not None:
                     df_uso = df_raw.copy()
                     df_uso.columns = [c.strip() for c in df_uso.columns]
                     df_uso['Fecha de terminación'] = pd.to_datetime(df_uso['Fecha de terminación'], errors='coerce')
@@ -465,15 +570,9 @@ if df_raw is not None:
                             df_display_uso = df_display_uso[orden_final_uso]
                             
                             st.error(f"🚨 Se detectaron {len(df_display_uso)} licencias sin reportar actividad en la última actualización del {ultima_fecha_uso.strftime('%d/%m/%Y')}.")
-                            
                             st.dataframe(df_display_uso, use_container_width=True, hide_index=True)
-                            st.caption("Filtros generales (Sucursal, Tipo y Buscador por número) aplicados en la parte superior de la pantalla.")
                         else:
                             st.success("🎉 ¡Excelente! Todas las licencias que coinciden con los filtros aplicados registran uso en la última actualización.")
-                    else:
-                        st.warning("No se pudo determinar la última fecha de actualización en los datos de la Hoja 1.")
-                else:
-                    st.warning("La base de datos de telemetría (Hoja 1) no está disponible para realizar el cruce.")
 
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
