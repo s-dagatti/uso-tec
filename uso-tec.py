@@ -522,76 +522,110 @@ if df_raw is not None:
                                         df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
                                         
                                         # =========================================================
-                                        # ADICIÓN DE KPIS Y COLORES PARA "RENOVABLE AVANZADA"
+                                        # ADICIÓN DE KPIS, GRÁFICO DE TORTA Y COLORES (RENOVABLE AVANZADA)
                                         # =========================================================
                                         if nombre_lic == "Renovable avanzada":
-                                            # 1. Cálculo de KPIs
+                                            # 1. Pre-cálculo de niveles para los KPIs y el Gráfico
                                             col_at_ref = "Uso AutoTrac™ (%)"
-                                            # Buscamos columnas avanzadas contratadas que no sean AutoTrac
                                             cols_avanzadas_ref = [c for c in columnas_dinamicas_formatear if "AutoTrac™" not in c]
                                             
                                             avg_autotrac = df_tabla_especifica[col_at_ref].mean() if col_at_ref in df_tabla_especifica.columns else 0
+                                            avg_avanzadas = df_tabla_especifica[cols_avanzadas_ref].mean(axis=1).mean() if cols_avanzadas_ref else 0
                                             
-                                            if cols_avanzadas_ref:
-                                                avg_avanzadas = df_tabla_especifica[cols_avanzadas_ref].mean(axis=1).mean()
-                                            else:
-                                                avg_avanzadas = 0
-                                                
-                                            # Renderizamos las tarjetas de KPI
-                                            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
-                                            with kpi_col1:
-                                                st.metric(label="Promedio Uso AutoTrac™", value=f"{avg_autotrac:.1f}%")
-                                            with kpi_col2:
-                                                st.metric(label="Promedio Funciones Avanzadas", value=f"{avg_avanzadas:.1f}%", help="AutoPath, Maniobras, Machine Sync, Guiado Pasivo, etc.")
-                                            with kpi_col3:
-                                                st.metric(label="Equipos en la Licencia", value=str(len(df_tabla_especifica)))
-                                            
-                                            st.markdown("---")
-                                            
-                                            # 2. Función para pintar filas según las reglas del negocio
-                                            def colorear_filas_avanzada(row):
-                                                at_val = row.get(col_at_ref, 0)
-                                                # Convertimos a flotante por si acaso viene como string
-                                                try: at_num = float(str(at_val).replace('%', ''))
+                                            # Determinamos el nivel fila por fila para armar la torta
+                                            def clasificar_nivel(row):
+                                                try: at_num = float(row[col_at_ref])
                                                 except: at_num = 0
                                                 
-                                                # Sacamos el máximo o promedio de las otras tecnologías avanzadas de la fila
                                                 vals_avanzados = []
                                                 for c_av in cols_avanzadas_ref:
-                                                    try: vals_avanzados.append(float(str(row.get(c_av, 0)).replace('%', '')))
+                                                    try: vals_avanzados.append(float(row[c_av]))
                                                     except: pass
                                                 max_av_num = max(vals_avanzados) if vals_avanzados else 0
                                                 
-                                                # Definición de estilos CSS (Background-color suave para que se lea el texto)
-                                                verde = 'background-color: rgba(40, 167, 69, 0.25); color: white;'
-                                                amarillo = 'background-color: rgba(255, 193, 7, 0.25); color: white;'
-                                                rojo = 'background-color: rgba(220, 53, 69, 0.25); color: white;'
-                                                
-                                                # Regla: Verde (Buen uso) -> AT > 60% Y cualquier otra > 20%
                                                 if at_num > 60.0 and max_av_num > 20.0:
-                                                    return [verde] * len(row)
-                                                # Regla: Amarillo (Uso medio) -> AT > 60% pero nada avanzado, O viceversa (Avanzado > 20% pero AT bajo)
+                                                    return 'Buen Uso (Alto)'
                                                 elif (at_num > 60.0 and max_av_num <= 20.0) or (at_num <= 60.0 and max_av_num > 20.0):
+                                                    return 'Uso Medio'
+                                                else:
+                                                    return 'Bajo Uso'
+                                            
+                                            # Creamos una columna temporal para agrupar en el gráfico
+                                            df_tabla_especifica['Nivel_Uso'] = df_tabla_especifica.apply(clasificar_nivel, axis=1)
+                                            df_counts_torta = df_tabla_especifica.groupby('Nivel_Uso').size().reset_index(name='Cantidad')
+                                            
+                                            # Distribución de columnas: 3 para KPIs y 1 para el Gráfico de Torta
+                                            kpi_col1, kpi_col2, kpi_col3, torta_col = st.columns([1, 1, 1, 1.8])
+                                            
+                                            with kpi_col1:
+                                                st.metric(label="Promedio Uso AutoTrac™", value=f"{avg_autotrac:.1f}%")
+                                            with kpi_col2:
+                                                st.metric(label="Promedio Funciones Avanzadas", value=f"{avg_avanzadas:.1f}%", help="AutoPath, Maniobras, Machine Sync, etc.")
+                                            with kpi_col3:
+                                                st.metric(label="Equipos en la Licencia", value=str(len(df_tabla_especifica)))
+                                                
+                                            with torta_col:
+                                                # Mapa de colores alineado al semáforo
+                                                mapa_colores_torta = {
+                                                    'Buen Uso (Alto)': '#28a745',
+                                                    'Uso Medio': '#ffc107',
+                                                    'Bajo Uso': '#dc3545'
+                                                }
+                                                fig_torta_lic = px.pie(
+                                                    df_counts_torta, 
+                                                    names='Nivel_Uso', 
+                                                    values='Cantidad',
+                                                    hole=0.4,
+                                                    color='Nivel_Uso',
+                                                    color_discrete_map=mapa_colores_torta
+                                                )
+                                                fig_torta_lic.update_traces(
+                                                    textinfo='percent+label',
+                                                    hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<extra></extra>"
+                                                )
+                                                fig_torta_lic.update_layout(
+                                                    margin=dict(t=0, b=0, l=0, r=0),
+                                                    height=140,
+                                                    showlegend=False
+                                                )
+                                                st.plotly_chart(fig_torta_lic, use_container_width=True)
+                                            
+                                            st.markdown("---")
+                                            
+                                            # 2. Función para pintar filas con letra Gris Oscuro Legible
+                                            def colorear_filas_avanzada(row):
+                                                nivel = row['Nivel_Uso']
+                                                
+                                                # Estilos CSS con texto gris oscuro (#212529) para contraste óptimo
+                                                verde = 'background-color: rgba(40, 167, 69, 0.25); color: #212529; font-weight: 500;'
+                                                amarillo = 'background-color: rgba(255, 193, 7, 0.30); color: #212529; font-weight: 500;'
+                                                rojo = 'background-color: rgba(220, 53, 69, 0.23); color: #212529; font-weight: 500;'
+                                                
+                                                if nivel == 'Buen Uso (Alto)':
+                                                    return [verde] * len(row)
+                                                elif nivel == 'Uso Medio':
                                                     return [amarillo] * len(row)
-                                                # Regla: Rojo -> Todo bajo
                                                 else:
                                                     return [rojo] * len(row)
                                             
-                                            # Formateamos la fecha antes de mostrar
-                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                            # Removemos la columna del gráfico para que no se muestre en la tabla final
+                                            df_mostrar_tabla = df_tabla_especifica.copy()
                                             
-                                            # Aplicamos los estilos y mostramos la tabla
-                                            df_estilizado = df_tabla_especifica.style.apply(colorear_filas_avanzada, axis=1)
+                                            # Formateamos la fecha antes de aplicar estilos
+                                            if 'Fecha de Vencimiento' in df_mostrar_tabla.columns:
+                                                df_mostrar_tabla['Fecha de Vencimiento'] = df_mostrar_tabla['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
                                             
-                                            # Formateamos visualmente los floats a porcentaje para la visualización limpia
-                                            format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
-                                            df_estilizado = df_estilizado.format(format_dict)
+                                            # Aplicamos los estilos de fondo y color de letra
+                                            df_estilizado = df_mostrar_tabla.style.apply(colorear_filas_avanzada, axis=1)
+                                            
+                                            # Ocultamos la columna 'Nivel_Uso' en el renderizado final para limpieza visual
+                                            columnas_formato = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
+                                            df_estilizado = df_estilizado.format(columnas_formato).hide(axis='columns', subset=['Nivel_Uso'])
                                             
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                                             
                                         else:
-                                            # Para el resto de las licencias mantiene el comportamiento estándar sin pintar filas
+                                            # Comportamiento estándar para el resto de las pestañas
                                             if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
                                                 df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
                                             
@@ -599,10 +633,6 @@ if df_raw is not None:
                                                 df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
                                                 
                                             st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
-                                            
-                                        st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
-                                    else:
-                                        st.info(f"No se registran equipos operando con la licencia '{nombre_lic}' bajo los filtros actuales.")
                 
                 # --- 4. SECCIÓN DE LICENCIAS SIN REGISTRO DE USO ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
