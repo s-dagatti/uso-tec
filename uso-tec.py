@@ -682,31 +682,26 @@ if df_raw is not None:
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
                                         # =========================================================
-                                        # 3. RESTO DE LAS PESTAÑAS (COMPORTAMIENTO ESTÁNDAR)
+                                        # 3. RESTO DE LAS PESTAÑAS (CORREGIDO PARA MOSTRAR SIEMPRE TRABAJO)
                                         # =========================================================
                                         else:
-                                            # Controlar si existen registros válidos con uso real (columnas > 0)
-                                            tiene_uso_real = False
-                                            if columnas_dinamicas_formatear:
-                                                # Si el máximo de todas las columnas de uso es mayor a 0, hay datos válidos
-                                                if (df_tabla_especifica[columnas_dinamicas_formatear].max().max()) > 0:
-                                                    tiene_uso_real = True
+                                            # Formateamos la fecha de vencimiento obligatoria
+                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
                                             
-                                            if tiene_uso_real:
-                                                if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                                    df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                            # Formateamos los porcentajes de las columnas de uso encontradas de forma segura
+                                            for col_formato in columnas_dinamicas_formatear:
+                                                # Aseguramos que sea numérico y si es nulo o 0, mapeamos limpio a '0.0%'
+                                                df_tabla_especifica[col_formato] = pd.to_numeric(df_tabla_especifica[col_formato], errors='coerce').fillna(0.0)
+                                                df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
                                                 
-                                                for col_formato in columnas_dinamicas_formatear:
-                                                    df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
-                                                    
-                                                st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
-                                            else:
-                                                st.info(f"ℹ️ No se registran datos de telemetría o uso para la licencia '{nombre_lic}' bajo los filtros seleccionados.")
+                                            # Mostramos SIEMPRE la tabla de los equipos pertenecientes a esta licencia
+                                            st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
                                             
                                         st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
                                     else:
-                                        # Cartel si el DataFrame viene directamente vacío desde el filtro
-                                        st.info(f"ℹ️ No se encuentran registros cargados para la licencia '{nombre_lic}' en esta consulta.")
+                                        # Cartel si la licencia no tiene directamente ningún equipo asignado en los filtros superiores
+                                        st.info(f"ℹ️ No se encuentran equipos registrados para la licencia '{nombre_lic}' en esta consulta.")
                                         
                 # --- 4. SECCIÓN DE LICENCIAS SIN REGISTRO DE USO ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
