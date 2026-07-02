@@ -522,18 +522,25 @@ if df_raw is not None:
                                         df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
                                         
                                         # =========================================================
-                                        # ADICIÓN DE KPIS, GRÁFICO DE TORTA Y COLORES (RENOVABLE AVANZADA)
+                                        # 1. PESTAÑA: RENOVABLE AVANZADA
                                         # =========================================================
                                         if nombre_lic == "Renovable avanzada":
-                                            # 1. Pre-cálculo de niveles para los KPIs y el Gráfico
                                             col_at_ref = "Uso AutoTrac™ (%)"
                                             cols_avanzadas_ref = [c for c in columnas_dinamicas_formatear if "AutoTrac™" not in c]
                                             
-                                            avg_autotrac = df_tabla_especifica[col_at_ref].mean() if col_at_ref in df_tabla_especifica.columns else 0
-                                            avg_avanzadas = df_tabla_especifica[cols_avanzadas_ref].mean(axis=1).mean() if cols_avanzadas_ref else 0
+                                            # Filtramos valores >= 1 para los promedios
+                                            serie_at = df_tabla_especifica[col_at_ref] if col_at_ref in df_tabla_especifica.columns else pd.Series(dtype=float)
+                                            avg_autotrac = serie_at[serie_at >= 1.0].mean() if not serie_at[serie_at >= 1.0].empty else 0
                                             
-                                            # Determinamos el nivel fila por fila para armar la torta
-                                            def clasificar_nivel(row):
+                                            if cols_avanzadas_ref:
+                                                df_avanzadas = df_tabla_especifica[cols_avanzadas_ref]
+                                                df_avanzadas_filtrado = df_avanzadas.where(df_avanzadas >= 1.0)
+                                                avg_avanzadas = df_avanzadas_filtrado.mean(axis=1).mean()
+                                                if pd.isna(avg_avanzadas): avg_avanzadas = 0
+                                            else:
+                                                avg_avanzadas = 0
+                                                
+                                            def clasificar_nivel_avanzada(row):
                                                 try: at_num = float(row[col_at_ref])
                                                 except: at_num = 0
                                                 
@@ -550,90 +557,157 @@ if df_raw is not None:
                                                 else:
                                                     return 'Bajo Uso'
                                             
-                                            # Creamos una columna temporal para agrupar en el gráfico
-                                            df_tabla_especifica['Nivel_Uso'] = df_tabla_especifica.apply(clasificar_nivel, axis=1)
+                                            df_tabla_especifica['Nivel_Uso'] = df_tabla_especifica.apply(clasificar_nivel_avanzada, axis=1)
                                             df_counts_torta = df_tabla_especifica.groupby('Nivel_Uso').size().reset_index(name='Cantidad')
                                             
-                                            # Distribución de columnas: 3 para KPIs y 1 para el Gráfico de Torta
                                             kpi_col1, kpi_col2, kpi_col3, torta_col = st.columns([1, 1, 1, 1.8])
-                                            
                                             with kpi_col1:
-                                                st.metric(label="Promedio Uso AutoTrac™", value=f"{avg_autotrac:.1f}%")
+                                                st.metric(label="Promedio Uso AutoTrac™ (>=1%)", value=f"{avg_autotrac:.1f}%")
                                             with kpi_col2:
-                                                st.metric(label="Promedio Funciones Avanzadas", value=f"{avg_avanzadas:.1f}%", help="AutoPath, Maniobras, Machine Sync, etc.")
+                                                st.metric(label="Promedio Funciones Avanzadas (>=1%)", value=f"{avg_avanzadas:.1f}%")
                                             with kpi_col3:
                                                 st.metric(label="Equipos en la Licencia", value=str(len(df_tabla_especifica)))
                                                 
                                             with torta_col:
-                                                # Mapa de colores alineado al semáforo
-                                                mapa_colores_torta = {
-                                                    'Buen Uso (Alto)': '#28a745',
-                                                    'Uso Medio': '#ffc107',
-                                                    'Bajo Uso': '#dc3545'
-                                                }
-                                                fig_torta_lic = px.pie(
-                                                    df_counts_torta, 
-                                                    names='Nivel_Uso', 
-                                                    values='Cantidad',
-                                                    hole=0.4,
-                                                    color='Nivel_Uso',
-                                                    color_discrete_map=mapa_colores_torta
-                                                )
-                                                fig_torta_lic.update_traces(
-                                                    textinfo='percent+label',
-                                                    hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<extra></extra>"
-                                                )
-                                                fig_torta_lic.update_layout(
-                                                    margin=dict(t=0, b=0, l=0, r=0),
-                                                    height=140,
-                                                    showlegend=False
-                                                )
+                                                mapa_colores_torta = {'Buen Uso (Alto)': '#28a745', 'Uso Medio': '#ffc107', 'Bajo Uso': '#dc3545'}
+                                                fig_torta_lic = px.pie(df_counts_torta, names='Nivel_Uso', values='Cantidad', hole=0.4, color='Nivel_Uso', color_discrete_map=mapa_colores_torta)
+                                                fig_torta_lic.update_traces(textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<extra></extra>")
+                                                fig_torta_lic.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=140, showlegend=False)
                                                 st.plotly_chart(fig_torta_lic, use_container_width=True)
                                             
                                             st.markdown("---")
                                             
-                                            # 2. Función para pintar filas con letra Gris Oscuro Legible
                                             def colorear_filas_avanzada(row):
                                                 nivel = row['Nivel_Uso']
+                                                # Eliminamos la propiedad color para usar el texto por defecto de Streamlit según el tema
+                                                verde = 'background-color: rgba(40, 167, 69, 0.40); font-weight: 500;'
+                                                amarillo = 'background-color: rgba(255, 193, 7, 0.45); font-weight: 500;'
+                                                rojo = 'background-color: rgba(220, 53, 69, 0.38); font-weight: 500;'
                                                 
-                                                # Estilos CSS con texto gris oscuro (#212529) para contraste óptimo
-                                                verde = 'background-color: rgba(40, 167, 69, 0.25); color: #212529; font-weight: 500;'
-                                                amarillo = 'background-color: rgba(255, 193, 7, 0.30); color: #212529; font-weight: 500;'
-                                                rojo = 'background-color: rgba(220, 53, 69, 0.23); color: #212529; font-weight: 500;'
-                                                
-                                                if nivel == 'Buen Uso (Alto)':
-                                                    return [verde] * len(row)
-                                                elif nivel == 'Uso Medio':
-                                                    return [amarillo] * len(row)
-                                                else:
-                                                    return [rojo] * len(row)
+                                                if nivel == 'Buen Uso (Alto)': return [verde] * len(row)
+                                                elif nivel == 'Uso Medio': return [amarillo] * len(row)
+                                                else: return [rojo] * len(row)
                                             
-                                            # Removemos la columna del gráfico para que no se muestre en la tabla final
                                             df_mostrar_tabla = df_tabla_especifica.copy()
-                                            
-                                            # Formateamos la fecha antes de aplicar estilos
                                             if 'Fecha de Vencimiento' in df_mostrar_tabla.columns:
                                                 df_mostrar_tabla['Fecha de Vencimiento'] = df_mostrar_tabla['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
                                             
-                                            # Aplicamos los estilos de fondo y color de letra
                                             df_estilizado = df_mostrar_tabla.style.apply(colorear_filas_avanzada, axis=1)
-                                            
-                                            # Ocultamos la columna 'Nivel_Uso' en el renderizado final para limpieza visual
-                                            columnas_formato = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
-                                            df_estilizado = df_estilizado.format(columnas_formato).hide(axis='columns', subset=['Nivel_Uso'])
-                                            
+                                            format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
+                                            df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
+
+                                        # =========================================================
+                                        # 2. PESTAÑA: COSECHADORA S7/X9 ULTIMATE
+                                        # =========================================================
+                                        elif nombre_lic == "Cosechadora S7/X9 Ultimate":
+                                            col_velocidad = "Uso Automatización de la velocidad de avance (%)"
+                                            col_ajustes = "Uso Automatización de ajustes de cosecha (%)"
+                                            cols_avanzadas_s7 = [c for c in columnas_dinamicas_formatear if c not in [col_velocidad, col_ajustes]]
                                             
-                                        else:
-                                            # Comportamiento estándar para el resto de las pestañas
-                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                            # Filtrado >= 1% para KPIs de Cosechadora
+                                            s_vel = df_tabla_especifica[col_velocidad] if col_velocidad in df_tabla_especifica.columns else pd.Series(dtype=float)
+                                            s_ajuste = df_tabla_especifica[col_ajustes] if col_ajustes in df_tabla_especifica.columns else pd.Series(dtype=float)
                                             
-                                            for col_formato in columnas_dinamicas_formatear:
-                                                df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
+                                            avg_velocidad = s_vel[s_vel >= 1.0].mean() if not s_vel[s_vel >= 1.0].empty else 0
+                                            avg_ajustes = s_ajuste[s_ajuste >= 1.0].mean() if not s_ajuste[s_ajuste >= 1.0].empty else 0
+                                            
+                                            if cols_avanzadas_s7:
+                                                df_av_s7 = df_tabla_especifica[cols_avanzadas_s7]
+                                                df_av_s7_filtrado = df_av_s7.where(df_av_s7 >= 1.0)
+                                                avg_avanzadas_s7 = df_av_s7_filtrado.mean(axis=1).mean()
+                                                if pd.isna(avg_avanzadas_s7): avg_avanzadas_s7 = 0
+                                            else:
+                                                avg_avanzadas_s7 = 0
                                                 
-                                            st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
-                
+                                            def clasificar_nivel_s7(row):
+                                                try: vel_num = float(row[col_velocidad])
+                                                except: vel_num = 0
+                                                try: aj_num = float(row[col_ajustes])
+                                                except: aj_num = 0
+                                                
+                                                vals_av = []
+                                                for c_av in cols_avanzadas_s7:
+                                                    try: vals_av.append(float(row[c_av]))
+                                                    except: pass
+                                                max_av_num = max(vals_av) if vals_av  else 0
+                                                
+                                                # Verdes: Buen uso -> Velocidad > 60% Y Ajustes > 60% Y cualquiera Avanzada > 20%
+                                                if vel_num > 60.0 and aj_num > 60.0 and max_av_num > 20.0:
+                                                    return 'Buen Uso (Alto)'
+                                                # Rojas: Todas por debajo
+                                                elif vel_num <= 60.0 and aj_num <= 60.0 and max_av_num <= 20.0:
+                                                    return 'Bajo Uso'
+                                                # Amarillas: Al menos una por debajo, pero no todas
+                                                else:
+                                                    return 'Uso Medio'
+                                            
+                                            df_tabla_especifica['Nivel_Uso'] = df_tabla_especifica.apply(clasificar_nivel_s7, axis=1)
+                                            df_counts_torta = df_tabla_especifica.groupby('Nivel_Uso').size().reset_index(name='Cantidad')
+                                            
+                                            kpi_col1, kpi_col2, kpi_col3, torta_col = st.columns([1, 1, 1, 1.8])
+                                            with kpi_col1:
+                                                st.metric(label="Promedio Autom. Velocidad (>=1%)", value=f"{avg_velocidad:.1f}%")
+                                            with kpi_col2:
+                                                st.metric(label="Promedio Ajustes Cosecha (>=1%)", value=f"{avg_ajustes:.1f}%")
+                                            with kpi_col3:
+                                                st.metric(label="Promedio Tec. Avanzadas (>=1%)", value=f"{avg_avanzadas_s7:.1f}%")
+                                                
+                                            with torta_col:
+                                                mapa_colores_torta = {'Buen Uso (Alto)': '#28a745', 'Uso Medio': '#ffc107', 'Bajo Uso': '#dc3545'}
+                                                fig_torta_lic = px.pie(df_counts_torta, names='Nivel_Uso', values='Cantidad', hole=0.4, color='Nivel_Uso', color_discrete_map=mapa_colores_torta)
+                                                fig_torta_lic.update_traces(textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Cantidad: %{value}<extra></extra>")
+                                                fig_torta_lic.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=140, showlegend=False)
+                                                st.plotly_chart(fig_torta_lic, use_container_width=True)
+                                                
+                                            st.markdown("---")
+                                            
+                                            def colorear_filas_s7(row):
+                                                nivel = row['Nivel_Uso']
+                                                verde = 'background-color: rgba(40, 167, 69, 0.40); font-weight: 500;'
+                                                amarillo = 'background-color: rgba(255, 193, 7, 0.45); font-weight: 500;'
+                                                rojo = 'background-color: rgba(220, 53, 69, 0.38); font-weight: 500;'
+                                                
+                                                if nivel == 'Buen Uso (Alto)': return [verde] * len(row)
+                                                elif nivel == 'Uso Medio': return [amarillo] * len(row)
+                                                else: return [rojo] * len(row)
+                                                
+                                            df_mostrar_tabla = df_tabla_especifica.copy()
+                                            if 'Fecha de Vencimiento' in df_mostrar_tabla.columns:
+                                                df_mostrar_tabla['Fecha de Vencimiento'] = df_mostrar_tabla['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                                
+                                            df_estilizado = df_mostrar_tabla.style.apply(colorear_filas_s7, axis=1)
+                                            format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
+                                            df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
+                                            st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
+
+                                        # =========================================================
+                                        # 3. RESTO DE LAS PESTAÑAS (COMPORTAMIENTO ESTÁNDAR)
+                                        # =========================================================
+                                        else:
+                                            # Controlar si existen registros válidos con uso real (columnas > 0)
+                                            tiene_uso_real = False
+                                            if columnas_dinamicas_formatear:
+                                                # Si el máximo de todas las columnas de uso es mayor a 0, hay datos válidos
+                                                if (df_tabla_especifica[columnas_dinamicas_formatear].max().max()) > 0:
+                                                    tiene_uso_real = True
+                                            
+                                            if tiene_uso_real:
+                                                if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                                    df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                                
+                                                for col_formato in columnas_dinamicas_formatear:
+                                                    df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
+                                                    
+                                                st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
+                                            else:
+                                                st.info(f"ℹ️ No se registran datos de telemetría o uso para la licencia '{nombre_lic}' bajo los filtros seleccionados.")
+                                            
+                                        st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
+                                    else:
+                                        # Cartel si el DataFrame viene directamente vacío desde el filtro
+                                        st.info(f"ℹ️ No se encuentran registros cargados para la licencia '{nombre_lic}' en esta consulta.")
+                                        
                 # --- 4. SECCIÓN DE LICENCIAS SIN REGISTRO DE USO ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
                 st.markdown("""
