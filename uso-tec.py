@@ -403,15 +403,19 @@ if df_raw is not None:
                 }
 
                 # Mapeo de nombres a columnas de telemetría de la Hoja 1
-                mapeo_columnas_telemetria = {
-                    "AutoTrac™": "AutoTrac™ Activo (%)",
-                    "AutoPath™": "AutoPath™ Activo (%)",
-                    "Automatización de maniobras AutoTrac™": "Automatización de maniobras AutoTrac™ Activo (%)",
-                    "Guiado pasivo de implemento AutoTrac™": "Guiado pasivo de implemento AutoTrac™ Activo (%)",
-                    "Machine Sync": "John Deere Machine Sync Vehículo guía activo (%)",
-                    "Control de secciones": "Tiempo de control de secciones Activo (%)",
-                    "Automatización de ajustes de cosecha": "Automatización de ajustes de cosecha Activo (%)"
-                }
+                        mapeo_columnas_telemetria = {
+                            "AutoTrac™": "AutoTrac™ Activo (%)",
+                            "AutoPath™": "AutoPath™ Activo (%)",
+                            "Automatización de maniobras AutoTrac™": "Automatización de maniobras AutoTrac™ Activo (%)",
+                            "Guiado pasivo de implemento AutoTrac™": "Guiado pasivo de implemento AutoTrac™ Activo (%)",
+                            "Machine Sync": "John Deere Machine Sync Vehículo guía activo (%)",
+                            "Control de secciones": "Tiempo de control de secciones Activo (%)",
+                            "Pulsación": "Pulsación Activo (%)", # <-- Mapeo para ExactApply
+                            "Automatización de ajustes de cosecha": "Automatización de ajustes de cosecha Activo (%)",
+                            "Automatización de la velocidad de avance": "Automatización de la velocidad de avance Activo (%)" # <-- Mapeo para Cosechadoras
+                        }
+
+                        st.divider()
 
                 # --- 1. GLOSARIO DE LICENCIAS (AISLADO) ---
                 st.subheader("📚 Glosario de Funciones por Licencia")
@@ -485,7 +489,7 @@ if df_raw is not None:
                         
                         st.divider()
                         
-                        # --- 3. SECCIÓN DE TABS POR TIPO DE LICENCIA (DESPUÉS DEL GRÁFICO) ---
+                        # --- 3. SECCIÓN DE TABS POR TIPO DE LICENCIA (REVISADA) ---
                         st.subheader("🎯 Monitoreo de Funciones Específicas Habilitadas")
                         st.markdown("Seleccioná la pestaña de la licencia que querés auditar para ver el porcentaje de uso real de las funciones que tiene contratadas el cliente.")
                         
@@ -498,15 +502,19 @@ if df_raw is not None:
                                     df_lic_especifica = df_uso_actual[df_uso_actual['Tipo Licencia'] == nombre_lic].copy()
                                     
                                     if not df_lic_especifica.empty:
+                                        # Armamos las columnas fijas obligatorias incluyendo la Fecha de Terminación después del Nro Licencia
+                                        # Nota: Se usa 'Fecha de terminación' que ya fue convertida a datetime líneas arriba.
                                         columnas_visibles = {
                                             'Organización': 'Organización',
                                             'Modelo': 'Modelo',
-                                            'Nro Licencia': 'Número de Licencia'
+                                            'Nro Licencia': 'Número de Licencia',
+                                            'Fecha de terminación': 'Fecha de Vencimiento' # <-- Agregada aquí
                                         }
                                         
                                         funciones_contratadas = glosario_licencias[nombre_lic]
                                         columnas_dinamicas_formatear = []
                                         
+                                        # Buscamos de forma inteligente las columnas correspondientes
                                         for func in funciones_contratadas:
                                             if func in mapeo_columnas_telemetria:
                                                 col_csv = mapeo_columnas_telemetria[func]
@@ -514,9 +522,20 @@ if df_raw is not None:
                                                     columnas_visibles[col_csv] = f"Uso {func} (%)"
                                                     columnas_dinamicas_formatear.append(f"Uso {func} (%)")
                                         
+                                        # Filtramos y renombramos las columnas válidas
                                         cols_validas_esp = [c for c in columnas_visibles.keys() if c in df_lic_especifica.columns]
                                         df_tabla_especifica = df_lic_especifica[cols_validas_esp].rename(columns=columnas_visibles)
                                         
+                                        # Orden explícito para garantizar que la Fecha quede al lado del número de licencia
+                                        columnas_ordenadas = ['Organización', 'Modelo', 'Número de Licencia', 'Fecha de Vencimiento'] + columnas_dinamicas_formatear
+                                        cols_finales_mostrar = [c for c in columnas_ordenadas if c in df_tabla_especifica.columns]
+                                        df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
+                                        
+                                        # Formateamos la fecha para que se lea limpia (DD/MM/AAAA)
+                                        if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                            df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                        
+                                        # Formateamos los porcentajes de las columnas de uso encontradas
                                         for col_formato in columnas_dinamicas_formatear:
                                             df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
                                             
@@ -524,14 +543,6 @@ if df_raw is not None:
                                         st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
                                     else:
                                         st.info(f"No se registran equipos operando con la licencia '{nombre_lic}' bajo los filtros actuales.")
-                        else:
-                            st.info("Sin registros para desglosar en pestañas.")
-                    else:
-                        st.warning("No se pudo detectar la fecha de actualización de telemetría en la Hoja 1.")
-                else:
-                    st.warning("La base de datos de Hoja 1 no se encuentra disponible.")
-                
-                st.divider()
                 
                 # --- 4. SECCIÓN DE LICENCIAS SIN REGISTRO DE USO ---
                 st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
