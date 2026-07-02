@@ -492,7 +492,7 @@ if df_raw is not None:
                             lista_nombres_licencias = list(glosario_licencias.keys())
                             tabs_licencias = st.tabs(lista_nombres_licencias)
                             
-                            for i, nombre_lic in enumerate(lista_nombres_licencias):
+                        for i, nombre_lic in enumerate(lista_nombres_licencias):
                                 with tabs_licencias[i]:
                                     df_lic_especifica = df_uso_actual[df_uso_actual['Tipo Licencia'] == nombre_lic].copy()
                                     
@@ -521,13 +521,85 @@ if df_raw is not None:
                                         cols_finales_mostrar = [c for c in columnas_ordenadas if c in df_tabla_especifica.columns]
                                         df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
                                         
-                                        if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                            df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
-                                        
-                                        for col_formato in columnas_dinamicas_formatear:
-                                            df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
+                                        # =========================================================
+                                        # ADICIÓN DE KPIS Y COLORES PARA "RENOVABLE AVANZADA"
+                                        # =========================================================
+                                        if nombre_lic == "Renovable avanzada":
+                                            # 1. Cálculo de KPIs
+                                            col_at_ref = "Uso AutoTrac™ (%)"
+                                            # Buscamos columnas avanzadas contratadas que no sean AutoTrac
+                                            cols_avanzadas_ref = [c for c in columnas_dinamicas_formatear if "AutoTrac™" not in c]
                                             
-                                        st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
+                                            avg_autotrac = df_tabla_especifica[col_at_ref].mean() if col_at_ref in df_tabla_especifica.columns else 0
+                                            
+                                            if cols_avanzadas_ref:
+                                                avg_avanzadas = df_tabla_especifica[cols_avanzadas_ref].mean(axis=1).mean()
+                                            else:
+                                                avg_avanzadas = 0
+                                                
+                                            # Renderizamos las tarjetas de KPI
+                                            kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+                                            with kpi_col1:
+                                                st.metric(label="Promedio Uso AutoTrac™", value=f"{avg_autotrac:.1f}%")
+                                            with kpi_col2:
+                                                st.metric(label="Promedio Funciones Avanzadas", value=f"{avg_avanzadas:.1f}%", help="AutoPath, Maniobras, Machine Sync, Guiado Pasivo, etc.")
+                                            with kpi_col3:
+                                                st.metric(label="Equipos en la Licencia", value=str(len(df_tabla_especifica)))
+                                            
+                                            st.markdown("---")
+                                            
+                                            # 2. Función para pintar filas según las reglas del negocio
+                                            def colorear_filas_avanzada(row):
+                                                at_val = row.get(col_at_ref, 0)
+                                                # Convertimos a flotante por si acaso viene como string
+                                                try: at_num = float(str(at_val).replace('%', ''))
+                                                except: at_num = 0
+                                                
+                                                # Sacamos el máximo o promedio de las otras tecnologías avanzadas de la fila
+                                                vals_avanzados = []
+                                                for c_av in cols_avanzadas_ref:
+                                                    try: vals_avanzados.append(float(str(row.get(c_av, 0)).replace('%', '')))
+                                                    except: pass
+                                                max_av_num = max(vals_avanzados) if vals_avanzados else 0
+                                                
+                                                # Definición de estilos CSS (Background-color suave para que se lea el texto)
+                                                verde = 'background-color: rgba(40, 167, 69, 0.25); color: white;'
+                                                amarillo = 'background-color: rgba(255, 193, 7, 0.25); color: white;'
+                                                rojo = 'background-color: rgba(220, 53, 69, 0.25); color: white;'
+                                                
+                                                # Regla: Verde (Buen uso) -> AT > 60% Y cualquier otra > 20%
+                                                if at_num > 60.0 and max_av_num > 20.0:
+                                                    return [verde] * len(row)
+                                                # Regla: Amarillo (Uso medio) -> AT > 60% pero nada avanzado, O viceversa (Avanzado > 20% pero AT bajo)
+                                                elif (at_num > 60.0 and max_av_num <= 20.0) or (at_num <= 60.0 and max_av_num > 20.0):
+                                                    return [amarillo] * len(row)
+                                                # Regla: Rojo -> Todo bajo
+                                                else:
+                                                    return [rojo] * len(row)
+                                            
+                                            # Formateamos la fecha antes de mostrar
+                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                            
+                                            # Aplicamos los estilos y mostramos la tabla
+                                            df_estilizado = df_tabla_especifica.style.apply(colorear_filas_avanzada, axis=1)
+                                            
+                                            # Formateamos visualmente los floats a porcentaje para la visualización limpia
+                                            format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
+                                            df_estilizado = df_estilizado.format(format_dict)
+                                            
+                                            st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
+                                            
+                                        else:
+                                            # Para el resto de las licencias mantiene el comportamiento estándar sin pintar filas
+                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
+                                            
+                                            for col_formato in columnas_dinamicas_formatear:
+                                                df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
+                                                
+                                            st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
+                                            
                                         st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
                                     else:
                                         st.info(f"No se registran equipos operando con la licencia '{nombre_lic}' bajo los filtros actuales.")
