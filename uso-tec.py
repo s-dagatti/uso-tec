@@ -23,45 +23,49 @@ def cargar_datos_desde_github(url):
     except Exception as e:
         st.error(f"Error al conectar con el servidor de datos: {e}")
         return None
-
-
+    
 # --- 1. FUNCIONES DE PROCESAMIENTO ---
 def procesar_datos_base(df):
     df.columns = [c.strip() for c in df.columns]
     
-    # 1. Manejo especial si la columna 'Fecha de terminación' viene duplicada
+    # 1. Normalizamos los nombres de las columnas antes de operar
+    df.columns = [c.capitalize() if c.lower() == 'vencimiento' else c for c in df.columns]
+    
+    # Manejo especial si la columna 'Fecha de terminación' viene duplicada
     if isinstance(df['Fecha de terminación'], pd.DataFrame):
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'].iloc[:, 0], errors='coerce')
     else:
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
     
+    # Limpieza previa de strings nulos en Vencimiento y Licencia para poder evaluar si están vacíos
+    for col_check in ['Nro Licencia', 'Vencimiento']:
+        if col_check in df.columns:
+            df[col_check] = df[col_check].astype(str).str.strip()
+            df[col_check] = df[col_check].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
+
     # ==========================================
-    # NUEVO: FILTRAR HISTÓRICO Y QUEDARNOS CON LO MÁS RECIENTE
+    # NUEVO: ORDENAMIENTO CRÍTICO E INTELIGENTE
     # ==========================================
-    # Ordenamos el DataFrame por 'Fecha de terminación' (las fechas más nuevas arriba)
-    df = df.sort_values(by='Fecha de terminación', ascending=False)
+    # Creamos una columna temporal que sea True si tiene Vencimiento válido (no es NaN)
+    df['tiene_vencimiento'] = df['Vencimiento'].notnull()
     
-    # Eliminamos duplicados por máquina o por número de serie, quedándonos con la fila más actual (la primera)
-    # Nota: Si usás 'Número de serie de la máquina' es más seguro que 'Máquina' por si hay nombres repetidos.
+    # Ordenamos con prioridad alta a las filas que SI tienen vencimiento, y prioridad secundaria a la fecha más nueva
+    df = df.sort_values(by=['tiene_vencimiento', 'Fecha de terminación'], ascending=[False, False])
+    
+    # Determinamos el identificador único de la máquina
     col_identificador = 'Número de serie de la máquina' if 'Número de serie de la máquina' in df.columns else 'Máquina'
+    
+    # Eliminamos duplicados: al estar ordenado, conservará la fila con vencimiento real y más reciente
     df = df.drop_duplicates(subset=[col_identificador], keep='first')
+    
+    # Eliminamos la columna auxiliar
+    df = df.drop(columns=['tiene_vencimiento'])
     
     # 2. Procesamiento de columnas de tecnología
     cols_tech = [c for c in df.columns if any(k.lower() in c.lower() for k in ['activo (%)', 'activado (%)'])]
     for col in cols_tech:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         df.loc[df[col] < 1.0, col] = np.nan
-
-    # 3. Normalización y limpieza de Licencias y Vencimiento
-    df.columns = [c.capitalize() if c.lower() == 'vencimiento' else c for c in df.columns]
-    
-    if 'Nro Licencia' in df.columns:
-        df['Nro Licencia'] = df['Nro Licencia'].astype(str).str.strip()
-        df['Nro Licencia'] = df['Nro Licencia'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
-        
-    if 'Vencimiento' in df.columns:
-        df['Vencimiento'] = df['Vencimiento'].astype(str).str.strip()
-        df['Vencimiento'] = df['Vencimiento'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
         
     return df
 
