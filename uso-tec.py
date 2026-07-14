@@ -529,8 +529,7 @@ if df_raw is not None:
                                     df_lic_especifica = df_uso_actual[df_uso_actual['Tipo Licencia'] == nombre_lic].copy()
                                     
                                     if not df_lic_especifica.empty:
-                                        # --- AQUÍ LA CORRECCIÓN CLAVE ---
-                                        # Cambiamos 'Fecha de terminación' por 'Vencimiento' para que busque la columna correcta de la Hoja 1
+                                        # --- MAPEO SEGURO DE COLUMNAS ---
                                         columnas_visibles = {
                                             'Organización': 'Organización',
                                             'Modelo': 'Modelo',
@@ -555,9 +554,10 @@ if df_raw is not None:
                                         cols_finales_mostrar = [c for c in columnas_ordenadas if c in df_tabla_especifica.columns]
                                         df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
                                         
-                                        # Aseguramos que 'Fecha de Vencimiento' esté en formato datetime si no lo está, para poder usar .dt.strftime
+                                        # --- SOLUCIÓN DE FECHA COMO CADENA SEGURA ---
+                                        # Evitamos pd.to_datetime para impedir que se pierdan o invaliden los meses abreviados en español (ej: "abr")
                                         if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                            df_tabla_especifica['Fecha de Vencimiento'] = pd.to_datetime(df_tabla_especifica['Fecha de Vencimiento'], errors='coerce')
+                                            df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].astype(str).str.replace('nan', 'Sin especificar')
                                         
                                         # =========================================================
                                         # 1. PESTAÑA: RENOVABLE AVANZADA
@@ -625,14 +625,11 @@ if df_raw is not None:
                                                 else: return [rojo] * len(row)
                                             
                                             df_mostrar_tabla = df_tabla_especifica.copy()
-                                            if 'Fecha de Vencimiento' in df_mostrar_tabla.columns:
-                                                df_mostrar_tabla['Fecha de Vencimiento'] = df_mostrar_tabla['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
-                                            
                                             df_estilizado = df_mostrar_tabla.style.apply(colorear_filas_avanzada, axis=1)
                                             format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
                                             df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-            
+                                            
                                         # =========================================================
                                         # 2. PESTAÑA: COSECHADORA S7/X9 ULTIMATE
                                         # =========================================================
@@ -705,21 +702,16 @@ if df_raw is not None:
                                                 else: return [rojo] * len(row)
                                                 
                                             df_mostrar_tabla = df_tabla_especifica.copy()
-                                            if 'Fecha de Vencimiento' in df_mostrar_tabla.columns:
-                                                df_mostrar_tabla['Fecha de Vencimiento'] = df_mostrar_tabla['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
-                                                
                                             df_estilizado = df_mostrar_tabla.style.apply(colorear_filas_s7, axis=1)
                                             format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
                                             df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-            
+                                            
                                         # =========================================================
                                         # 3. RESTO DE LAS PESTAÑAS (OTRAS LICENCIAS)
                                         # =========================================================
                                         else:
-                                            if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
-                                                df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
-                                            
+                                            # Formateamos las columnas dinámicas para mostrar '%' de forma prolija
                                             for col_formato in columnas_dinamicas_formatear:
                                                 df_tabla_especifica[col_formato] = pd.to_numeric(df_tabla_especifica[col_formato], errors='coerce').fillna(0.0)
                                                 df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
