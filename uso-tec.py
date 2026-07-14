@@ -17,12 +17,17 @@ URL_LICENCIAS_RAW = "https://raw.githubusercontent.com/s-dagatti/uso-tec/main/Li
 @st.cache_data(ttl=300)  # Se cachea por 5 minutos para que la navegación sea ultra rápida
 def cargar_datos_desde_github(url):
     try:
-        # Importante: Si tu CSV de GitHub usa punto y coma, cambiá sep=',' por sep=';'
-        df = pd.read_csv(url, sep=',')
+        # IMPORTANTE: Agregamos encoding='utf-8-sig' para que reconozca tildes, meses en español y fechas complejas
+        df = pd.read_csv(url, sep=',', encoding='utf-8-sig')
         return df
     except Exception as e:
-        st.error(f"Error al conectar con el servidor de datos: {e}")
-        return None
+        # Si por alguna razón tu archivo en GitHub tuviera otra codificación, probamos con latin1 como respaldo
+        try:
+            df = pd.read_csv(url, sep=',', encoding='latin1')
+            return df
+        except:
+            st.error(f"Error al conectar con el servidor de datos: {e}")
+            return None
     
 # --- 1. FUNCIONES DE PROCESAMIENTO ---
 def procesar_datos_base(df):
