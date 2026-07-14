@@ -36,46 +36,48 @@ def procesar_datos_base(df):
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'].iloc[:, 0], errors='coerce')
     else:
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
-    
-    # Limpieza previa de strings nulos en Vencimiento y Licencia para poder evaluar si están vacíos
-    for col_check in ['Nro Licencia', 'Vencimiento']:
-        if col_check in df.columns:
-            df[col_check] = df[col_check].astype(str).str.strip()
-            df[col_check] = df[col_check].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
 
     # ==========================================
-    # NUEVO: ORDENAMIENTO CRÍTICO E INTELIGENTE
+    # 2. ORDENAMIENTO CRÍTICO E INTELIGENTE
     # ==========================================
-    # Creamos una columna temporal que sea True si tiene Vencimiento válido (no es NaN)
-    df['tiene_vencimiento'] = df['Vencimiento'].notnull()
+    # Creamos una columna temporal para priorizar registros que tengan el Vencimiento cargado
+    # Primero nos aseguramos de que no sea textualmente '#N/A' o vacíos antes de evaluar
+    if 'Vencimiento' in df.columns:
+        df['tiene_vencimiento'] = df['Vencimiento'].astype(str).str.strip().replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan).notnull()
+        df = df.sort_values(by=['tiene_vencimiento', 'Fecha de terminación'], ascending=[False, False])
+        df = df.drop(columns=['tiene_vencimiento'])
+    else:
+        df = df.sort_values(by='Fecha de terminación', ascending=False)
     
-    # Ordenamos con prioridad alta a las filas que SI tienen vencimiento, y prioridad secundaria a la fecha más nueva
-    df = df.sort_values(by=['tiene_vencimiento', 'Fecha de terminación'], ascending=[False, False])
-    
-    # Determinamos el identificador único de la máquina
+    # Determinamos el identificador único de la máquina para eliminar duplicados históricos
     col_identificador = 'Número de serie de la máquina' if 'Número de serie de la máquina' in df.columns else 'Máquina'
-    
-    # Eliminamos duplicados: al estar ordenado, conservará la fila con vencimiento real y más reciente
     df = df.drop_duplicates(subset=[col_identificador], keep='first')
     
-    # Eliminamos la columna auxiliar
-    df = df.drop(columns=['tiene_vencimiento'])
-    
-    # 2. Procesamiento de columnas de tecnología
+    # 3. Procesamiento de columnas de tecnología
     cols_tech = [c for c in df.columns if any(k.lower() in c.lower() for k in ['activo (%)', 'activado (%)'])]
     for col in cols_tech:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         df.loc[df[col] < 1.0, col] = np.nan
+        
+    # ==========================================
+    # 4. LIMPIEZA ULTRA-SEGURA (EL NUEVO CÓDIGO)
+    # ==========================================
+    if 'Nro Licencia' in df.columns:
+        df['Nro Licencia'] = df['Nro Licencia'].astype(str).str.strip()
+    
+    if 'Vencimiento' in df.columns:
+        df['Vencimiento'] = df['Vencimiento'].astype(str).str.strip()
+        # Solo reemplazamos strings vacíos literales, dejando formatos de fecha intactos
+        df['Vencimiento'] = df['Vencimiento'].replace(['nan', 'None', ''], np.nan)
 
-    # === LÍNEAS DE DIAGNÓSTICO TEMPORAL ===
+    # === LÍNEAS DE DIAGNÓSTICO TEMPORAL EN TERMINAL ===
     print("\n--- CHEQUEO DE DATOS EN TERMINAL ---")
-    # Buscamos un ejemplo que sepamos que falla, como Rostirolla
     ejemplo = df[df['Organización'].str.contains('ROSTIROLLA|La Soledad|ADJ', case=False, na=False)]
     print(ejemplo[['Organización', 'Máquina', 'Nro Licencia', 'Vencimiento']])
     print("------------------------------------\n")
         
     return df
-
+    
 def filtrar_aptitud(df):
     def check(row):
         monitor = str(row.get('Monitor', '')).upper()
