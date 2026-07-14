@@ -66,6 +66,13 @@ def procesar_datos_base(df):
     for col in cols_tech:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         df.loc[df[col] < 1.0, col] = np.nan
+
+    # === LÍNEAS DE DIAGNÓSTICO TEMPORAL ===
+    print("\n--- CHEQUEO DE DATOS EN TERMINAL ---")
+    # Buscamos un ejemplo que sepamos que falla, como Rostirolla
+    ejemplo = df[df['Organización'].str.contains('ROSTIROLLA|La Soledad|ADJ', case=False, na=False)]
+    print(ejemplo[['Organización', 'Máquina', 'Nro Licencia', 'Vencimiento']])
+    print("------------------------------------\n")
         
     return df
 
