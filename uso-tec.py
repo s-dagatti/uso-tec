@@ -29,40 +29,41 @@ def cargar_datos_desde_github(url):
 def procesar_datos_base(df):
     df.columns = [c.strip() for c in df.columns]
     
-    # Manejo especial si la columna 'Fecha de terminación' viene duplicada
+    # 1. Manejo especial si la columna 'Fecha de terminación' viene duplicada
     if isinstance(df['Fecha de terminación'], pd.DataFrame):
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'].iloc[:, 0], errors='coerce')
     else:
         df['Fecha de terminación'] = pd.to_datetime(df['Fecha de terminación'], errors='coerce')
-        
+    
+    # ==========================================
+    # NUEVO: FILTRAR HISTÓRICO Y QUEDARNOS CON LO MÁS RECIENTE
+    # ==========================================
+    # Ordenamos el DataFrame por 'Fecha de terminación' (las fechas más nuevas arriba)
+    df = df.sort_values(by='Fecha de terminación', ascending=False)
+    
+    # Eliminamos duplicados por máquina o por número de serie, quedándonos con la fila más actual (la primera)
+    # Nota: Si usás 'Número de serie de la máquina' es más seguro que 'Máquina' por si hay nombres repetidos.
+    col_identificador = 'Número de serie de la máquina' if 'Número de serie de la máquina' in df.columns else 'Máquina'
+    df = df.drop_duplicates(subset=[col_identificador], keep='first')
+    
+    # 2. Procesamiento de columnas de tecnología
     cols_tech = [c for c in df.columns if any(k.lower() in c.lower() for k in ['activo (%)', 'activado (%)'])]
     for col in cols_tech:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        # YA NO MULTIPLICAMOS POR 100 porque los datos ya vienen como enteros/decimales de porcentaje (ej: 12.5)
-        # Filtro de ruido: Si querés seguir ignorando registros menores al 1% de uso, dejamos esta línea:
         df.loc[df[col] < 1.0, col] = np.nan
 
-    # ==========================================
-    # NUEVO: PROCESAMIENTO DE LICENCIAS Y VENCIMIENTO (DIRECTO DE HOJA 1)
-    # ==========================================
-    
-    # Aseguramos que la columna de Vencimiento se llame 'Vencimiento' (con V mayúscula)
+    # 3. Normalización y limpieza de Licencias y Vencimiento
     df.columns = [c.capitalize() if c.lower() == 'vencimiento' else c for c in df.columns]
     
-    # Limpiamos y normalizamos la columna 'Nro Licencia'
     if 'Nro Licencia' in df.columns:
         df['Nro Licencia'] = df['Nro Licencia'].astype(str).str.strip()
-        # Reemplazamos los nulos de Excel por nulos reales de Python (para que Streamlit no muestre strings feos)
         df['Nro Licencia'] = df['Nro Licencia'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
         
-    # Limpiamos la columna 'Vencimiento'
     if 'Vencimiento' in df.columns:
         df['Vencimiento'] = df['Vencimiento'].astype(str).str.strip()
         df['Vencimiento'] = df['Vencimiento'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
         
     return df
-
 
 def filtrar_aptitud(df):
     def check(row):
