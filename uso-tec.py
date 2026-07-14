@@ -381,12 +381,12 @@ if df_raw is not None:
                         "Automatización de maniobras AutoTrac™", "Machine Sync", "AutoPath™", 
                         "Automatización de ajustes de cosecha", "Gestión inteligente de potencia (IPM)", 
                         "Vistas satelitales", "Cámaras delanteras",
-                        "Automatización de la velocidad de avance" # <-- Agregada aquí
+                        "Automatización de la velocidad de avance"
                     ],
                     "G5 Advanced - Aplicación autopropulsada": [
                         "Capa de fondo de satélite", "Automatización de maniobras AutoTrac™", "Razones de inactividad",
                         "Compartir datos en campo", "AutoPath™",
-                        "Control de secciones", "Pulsación" # <-- Agregadas aquí
+                        "Control de secciones", "Pulsación"
                     ],
                     "G5 Advanced - Cosechadora": [
                         "Capa de fondo de satélite", "Razones de inactividad", "Compartir datos en campo",
@@ -403,7 +403,7 @@ if df_raw is not None:
                         "Guiado pasivo de implemento AutoTrac™"
                     ]
                 }
-
+            
                 # Mapeo de nombres a columnas de telemetría de la Hoja 1
                 mapeo_columnas_telemetria = {
                     "AutoTrac™": "AutoTrac™ Activo (%)",
@@ -412,13 +412,13 @@ if df_raw is not None:
                     "Guiado pasivo de implemento AutoTrac™": "Guiado pasivo de implemento AutoTrac™ Activo (%)",
                     "Machine Sync": "John Deere Machine Sync Vehículo guía activo (%)",
                     "Control de secciones": "Tiempo de control de secciones Activo (%)",
-                    "Pulsación": "Pulsación Activo (%)", # <-- Mapeo para ExactApply
+                    "Pulsación": "Pulsación Activo (%)",
                     "Automatización de ajustes de cosecha": "Automatización de ajustes de cosecha Activo (%)",
-                    "Automatización de la velocidad de avance": "Automatización de la velocidad de avance Activo (%)" # <-- Mapeo para Cosechadoras S7/X9
+                    "Automatización de la velocidad de avance": "Automatización de la velocidad de avance Activo (%)"
                 }
-
+            
                 st.divider()
-
+            
                 # --- 1. GLOSARIO DE LICENCIAS (AISLADO) ---
                 st.subheader("📚 Glosario de Funciones por Licencia")
                 with st.expander("🔍 Consultar qué incluye cada tipo de licencia", expanded=False):
@@ -431,15 +431,14 @@ if df_raw is not None:
                     st.markdown(f"### Funciones incluidas en **{licencia_glosario_sel}**:")
                     for funcion in glosario_licencias[licencia_glosario_sel]:
                         st.markdown(f"• {funcion}")
-                
+                    
                 st.divider()
                 
-                # --- 2. ESTADÍSTICAS CONSOLIDADAS (APLICANDO FILTROS SUPERIORES Y SIDEBAR) ---
+                # --- 2. ESTADÍSTICAS CONSOLIDADAS ---
                 st.subheader("📈 Estadísticas Consolidadas de Uso General")
                 
                 if df_full is not None and not df_full.empty:
                     df_base_uso = df_full.copy()
-                    
                     df_base_uso.columns = [c.strip() for c in df_base_uso.columns]
                     df_base_uso['Fecha de terminación'] = pd.to_datetime(df_base_uso['Fecha de terminación'], errors='coerce')
                     
@@ -447,7 +446,6 @@ if df_raw is not None:
                     
                     if not pd.isna(ultima_fecha_act):
                         df_uso_actual = df_base_uso[df_base_uso['Fecha de terminación'] == ultima_fecha_act].copy()
-                        
                         df_uso_actual = df_uso_actual[df_uso_actual['Nro Licencia'].notnull() & (df_uso_actual['Nro Licencia'].astype(str).str.strip() != "") & (df_uso_actual['Nro Licencia'].astype(str).str.strip() != "#N/A")]
                         
                         if sucursal_sel != "Todas":
@@ -460,7 +458,7 @@ if df_raw is not None:
                         for col in df_uso_actual.columns:
                             if '%' in col or 'Activo' in col:
                                 df_uso_actual[col] = pd.to_numeric(df_uso_actual[col], errors='coerce').fillna(0)
-
+            
                         if not df_uso_actual.empty:
                             st.markdown(f"**Distribución de Licencias por Tipo de Equipo (Actualizado al {ultima_fecha_act.strftime('%d/%m/%Y')})**")
                             df_chart_uso = df_uso_actual.groupby(['Tipo', 'Tipo Licencia']).size().reset_index(name='Cantidad')
@@ -484,7 +482,7 @@ if df_raw is not None:
                         
                         st.divider()
                         
-                        # --- 3. SECCIÓN DE TABS POR TIPO DE LICENCIA (REVISADA) ---
+                        # --- 3. SECCIÓN DE TABS POR TIPO DE LICENCIA ---
                         st.subheader("🎯 Monitoreo de Funciones Específicas Habilitadas")
                         st.markdown("Seleccioná la pestaña de la licencia que querés auditar para ver el porcentaje de uso real de las funciones que tiene contratadas el cliente.")
                         
@@ -492,16 +490,18 @@ if df_raw is not None:
                             lista_nombres_licencias = list(glosario_licencias.keys())
                             tabs_licencias = st.tabs(lista_nombres_licencias)
                             
-                        for i, nombre_lic in enumerate(lista_nombres_licencias):
+                            for i, nombre_lic in enumerate(lista_nombres_licencias):
                                 with tabs_licencias[i]:
                                     df_lic_especifica = df_uso_actual[df_uso_actual['Tipo Licencia'] == nombre_lic].copy()
                                     
                                     if not df_lic_especifica.empty:
+                                        # --- AQUÍ LA CORRECCIÓN CLAVE ---
+                                        # Cambiamos 'Fecha de terminación' por 'Vencimiento' para que busque la columna correcta de la Hoja 1
                                         columnas_visibles = {
                                             'Organización': 'Organización',
                                             'Modelo': 'Modelo',
                                             'Nro Licencia': 'Número de Licencia',
-                                            'Fecha de terminación': 'Fecha de Vencimiento'
+                                            'Vencimiento': 'Fecha de Vencimiento' 
                                         }
                                         
                                         funciones_contratadas = glosario_licencias[nombre_lic]
@@ -521,6 +521,10 @@ if df_raw is not None:
                                         cols_finales_mostrar = [c for c in columnas_ordenadas if c in df_tabla_especifica.columns]
                                         df_tabla_especifica = df_tabla_especifica[cols_finales_mostrar]
                                         
+                                        # Aseguramos que 'Fecha de Vencimiento' esté en formato datetime si no lo está, para poder usar .dt.strftime
+                                        if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
+                                            df_tabla_especifica['Fecha de Vencimiento'] = pd.to_datetime(df_tabla_especifica['Fecha de Vencimiento'], errors='coerce')
+                                        
                                         # =========================================================
                                         # 1. PESTAÑA: RENOVABLE AVANZADA
                                         # =========================================================
@@ -528,7 +532,6 @@ if df_raw is not None:
                                             col_at_ref = "Uso AutoTrac™ (%)"
                                             cols_avanzadas_ref = [c for c in columnas_dinamicas_formatear if "AutoTrac™" not in c]
                                             
-                                            # Filtramos valores >= 1 para los promedios
                                             serie_at = df_tabla_especifica[col_at_ref] if col_at_ref in df_tabla_especifica.columns else pd.Series(dtype=float)
                                             avg_autotrac = serie_at[serie_at >= 1.0].mean() if not serie_at[serie_at >= 1.0].empty else 0
                                             
@@ -579,7 +582,6 @@ if df_raw is not None:
                                             
                                             def colorear_filas_avanzada(row):
                                                 nivel = row['Nivel_Uso']
-                                                # Eliminamos la propiedad color para usar el texto por defecto de Streamlit según el tema
                                                 verde = 'background-color: rgba(40, 167, 69, 0.40); font-weight: 500;'
                                                 amarillo = 'background-color: rgba(255, 193, 7, 0.45); font-weight: 500;'
                                                 rojo = 'background-color: rgba(220, 53, 69, 0.38); font-weight: 500;'
@@ -596,7 +598,7 @@ if df_raw is not None:
                                             format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
                                             df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-
+            
                                         # =========================================================
                                         # 2. PESTAÑA: COSECHADORA S7/X9 ULTIMATE
                                         # =========================================================
@@ -605,7 +607,6 @@ if df_raw is not None:
                                             col_ajustes = "Uso Automatización de ajustes de cosecha (%)"
                                             cols_avanzadas_s7 = [c for c in columnas_dinamicas_formatear if c not in [col_velocidad, col_ajustes]]
                                             
-                                            # Filtrado >= 1% para KPIs de Cosechadora
                                             s_vel = df_tabla_especifica[col_velocidad] if col_velocidad in df_tabla_especifica.columns else pd.Series(dtype=float)
                                             s_ajuste = df_tabla_especifica[col_ajustes] if col_ajustes in df_tabla_especifica.columns else pd.Series(dtype=float)
                                             
@@ -630,15 +631,12 @@ if df_raw is not None:
                                                 for c_av in cols_avanzadas_s7:
                                                     try: vals_av.append(float(row[c_av]))
                                                     except: pass
-                                                max_av_num = max(vals_av) if vals_av  else 0
+                                                max_av_num = max(vals_av) if vals_av else 0
                                                 
-                                                # Verdes: Buen uso -> Velocidad > 60% Y Ajustes > 60% Y cualquiera Avanzada > 20%
                                                 if vel_num > 60.0 and aj_num > 60.0 and max_av_num > 20.0:
                                                     return 'Buen Uso (Alto)'
-                                                # Rojas: Todas por debajo
                                                 elif vel_num <= 60.0 and aj_num <= 60.0 and max_av_num <= 20.0:
                                                     return 'Bajo Uso'
-                                                # Amarillas: Al menos una por debajo, pero no todas
                                                 else:
                                                     return 'Uso Medio'
                                             
@@ -680,67 +678,23 @@ if df_raw is not None:
                                             format_dict = {col: '{:.1f}%'.format for col in columnas_dinamicas_formatear}
                                             df_estilizado = df_estilizado.format(format_dict).hide(axis='columns', subset=['Nivel_Uso'])
                                             st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
-
+            
                                         # =========================================================
-                                        # 3. RESTO DE LAS PESTAÑAS (CORREGIDO PARA MOSTRAR SIEMPRE TRABAJO)
+                                        # 3. RESTO DE LAS PESTAÑAS (OTRAS LICENCIAS)
                                         # =========================================================
                                         else:
-                                            # Formateamos la fecha de vencimiento obligatoria
                                             if 'Fecha de Vencimiento' in df_tabla_especifica.columns:
                                                 df_tabla_especifica['Fecha de Vencimiento'] = df_tabla_especifica['Fecha de Vencimiento'].dt.strftime('%d/%m/%Y')
                                             
-                                            # Formateamos los porcentajes de las columnas de uso encontradas de forma segura
                                             for col_formato in columnas_dinamicas_formatear:
-                                                # Aseguramos que sea numérico y si es nulo o 0, mapeamos limpio a '0.0%'
                                                 df_tabla_especifica[col_formato] = pd.to_numeric(df_tabla_especifica[col_formato], errors='coerce').fillna(0.0)
                                                 df_tabla_especifica[col_formato] = df_tabla_especifica[col_formato].map('{:.1f}%'.format)
                                                 
-                                            # Mostramos SIEMPRE la tabla de los equipos pertenecientes a esta licencia
                                             st.dataframe(df_tabla_especifica, use_container_width=True, hide_index=True)
                                             
                                         st.caption(f"Mostrando {len(df_tabla_especifica)} equipos con licencia tipo '{nombre_lic}' activa.")
                                     else:
-                                        # Cartel si la licencia no tiene directamente ningún equipo asignado en los filtros superiores
                                         st.info(f"ℹ️ No se encuentran equipos registrados para la licencia '{nombre_lic}' en esta consulta.")
-                                        
-                # --- 4. SECCIÓN DE LICENCIAS SIN REGISTRO DE USO ---
-                st.subheader("⚠️ Licencias Adquiridas Sin Registro de Uso")
-                st.markdown("""
-                Este análisis compara el maestro de **Licencias** contra los reportes de actividad de la **Hoja 1** (restringido a la última fecha de actualización disponible).
-                """)
-                
-                if df_raw is not None and df_lic_filtrado is not None:
-                    df_uso = df_raw.copy()
-                    df_uso.columns = [c.strip() for c in df_uso.columns]
-                    df_uso['Fecha de terminación'] = pd.to_datetime(df_uso['Fecha de terminación'], errors='coerce')
-                    
-                    ultima_fecha_uso = df_uso['Fecha de terminación'].max()
-                    
-                    if not pd.isna(ultima_fecha_uso):
-                        df_uso_reciente = df_uso[df_uso['Fecha de terminación'] == ultima_fecha_uso]
-                        licencias_con_uso = df_uso_reciente['Nro Licencia'].dropna().astype(str).str.strip().unique()
-                        
-                        df_sin_uso = df_lic_filtrado[~df_lic_filtrado['Número de licencia'].isin(licencias_con_uso)].copy()
-                        df_sin_uso = df_sin_uso.drop_duplicates(subset=['Número de licencia'])
-                        
-                        if not df_sin_uso.empty:
-                            columnas_mapeo_uso = {
-                                'Número de licencia': 'Número de licencia', 'Nombre del cliente': 'Organización',
-                                'Nombre de licencia': 'Nombre de licencia', 'Fecha de terminación': 'Fecha de terminación',
-                                'N.° de serie': 'N° de serie del Monitor', 'Sucursal': 'Sucursal'
-                            }
-                            cols_validas = [c for c in columnas_mapeo_uso.keys() if c in df_sin_uso.columns]
-                            df_display_uso = df_sin_uso[cols_validas].copy().rename(columns=columnas_mapeo_uso)
-                            
-                            orden_columnas_uso = ['Número de licencia', 'Organización', 'Nombre de licencia', 'Fecha de terminación', 'N° de serie del Monitor', 'Sucursal']
-                            orden_final_uso = [c for c in orden_columnas_uso if c in df_display_uso.columns]
-                            df_display_uso = df_display_uso[orden_final_uso]
-                            
-                            st.error(f"🚨 Se detectaron {len(df_display_uso)} licencias sin reportar actividad en la última actualización del {ultima_fecha_uso.strftime('%d/%m/%Y')}.")
-                            st.dataframe(df_display_uso, use_container_width=True, hide_index=True)
-                        else:
-                            st.success("🎉 ¡Excelente! Todas las licencias que coinciden con los filtros aplicados registran uso en la última actualización.")
-
     # ---------------------------------------------------------
     # TAB 1: TERMÓMETRO GENERAL
     # ---------------------------------------------------------
