@@ -60,21 +60,18 @@ def procesar_datos_base(df):
         df.loc[df[col] < 1.0, col] = np.nan
         
     # ==========================================
-    # 4. LIMPIEZA ULTRA-SEGURA (EL NUEVO CÓDIGO)
+    # 4. LIMPIEZA ULTRA-SEGURA DE LICENCIAS Y VENCIMIENTO
     # ==========================================
     if 'Nro Licencia' in df.columns:
         df['Nro Licencia'] = df['Nro Licencia'].astype(str).str.strip()
+        df['Nro Licencia'] = df['Nro Licencia'].replace(['nan', 'None', '', '#N/A', '#N/D'], np.nan)
     
     if 'Vencimiento' in df.columns:
+        # Aseguramos que se lea como texto limpio, eliminando espacios invisibles
         df['Vencimiento'] = df['Vencimiento'].astype(str).str.strip()
-        # Solo reemplazamos strings vacíos literales, dejando formatos de fecha intactos
-        df['Vencimiento'] = df['Vencimiento'].replace(['nan', 'None', ''], np.nan)
-
-    # === LÍNEAS DE DIAGNÓSTICO TEMPORAL EN TERMINAL ===
-    print("\n--- CHEQUEO DE DATOS EN TERMINAL ---")
-    ejemplo = df[df['Organización'].str.contains('ROSTIROLLA|La Soledad|ADJ', case=False, na=False)]
-    print(ejemplo[['Organización', 'Máquina', 'Nro Licencia', 'Vencimiento']])
-    print("------------------------------------\n")
+        
+        # Reemplazamos únicamente los valores que son errores reales
+        df['Vencimiento'] = df['Vencimiento'].replace(['nan', 'None', '', '#N/A', '#N/D'], np.nan)
         
     return df
     
