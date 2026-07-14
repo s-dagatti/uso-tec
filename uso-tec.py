@@ -42,6 +42,24 @@ def procesar_datos_base(df):
         # YA NO MULTIPLICAMOS POR 100 porque los datos ya vienen como enteros/decimales de porcentaje (ej: 12.5)
         # Filtro de ruido: Si querés seguir ignorando registros menores al 1% de uso, dejamos esta línea:
         df.loc[df[col] < 1.0, col] = np.nan
+
+    # ==========================================
+    # NUEVO: PROCESAMIENTO DE LICENCIAS Y VENCIMIENTO (DIRECTO DE HOJA 1)
+    # ==========================================
+    
+    # Aseguramos que la columna de Vencimiento se llame 'Vencimiento' (con V mayúscula)
+    df.columns = [c.capitalize() if c.lower() == 'vencimiento' else c for c in df.columns]
+    
+    # Limpiamos y normalizamos la columna 'Nro Licencia'
+    if 'Nro Licencia' in df.columns:
+        df['Nro Licencia'] = df['Nro Licencia'].astype(str).str.strip()
+        # Reemplazamos los nulos de Excel por nulos reales de Python (para que Streamlit no muestre strings feos)
+        df['Nro Licencia'] = df['Nro Licencia'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
+        
+    # Limpiamos la columna 'Vencimiento'
+    if 'Vencimiento' in df.columns:
+        df['Vencimiento'] = df['Vencimiento'].astype(str).str.strip()
+        df['Vencimiento'] = df['Vencimiento'].replace(['#N/A', '#N/D', 'nan', 'None', ''], np.nan)
         
     return df
 
